@@ -6,3 +6,6 @@
 *.log
 report.pdf
 *.synctex.gz
+
+
+**/.DS_Store
