@@ -42,6 +42,20 @@ or Math in Paper Title or Abstract.
 \section{Modelos del sistema}
 
 \subsection{Arquitectonico}
+El sistema implementa un modelo arquitectónico por capas, contando con un total de 3 capas. La primera capa
+es la capa de consumidores donde los procesos clientes solicitan transacciones al gestor de transacciones que 
+pueden ser reservas de asientos, modificaciones de reserva, consulta de eventos en un determinado mes o cancelaciones
+de reserva.
+
+La segunda capa es la capa de servicios de negocio donde se encuentra el gestor de transacciones encargado de enrutar
+las peticiones por el canal síncrono si se tratan de reservas, consultas o modificaciones, o las enruta por el canal 
+asíncrono si es una petición de cancelación. Las peticiones síncronas son procesadas por el servicio de procesamiento
+de reservas/modificaciones/consultas  (RMC), mientras que las peticiones asíncronas son procesadas por el servicio de 
+cancelaciones y notificaciones.
+
+La tercera y última capa es la capa de servicios de almacenamiento que se encarga del manejo de transacciones sobre
+la base de datos principal.
+
 \subsection{Interacción}
 \subsection{Fallos}
 \subsection{Seguridad}
