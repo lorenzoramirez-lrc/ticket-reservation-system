@@ -5,7 +5,8 @@ enum RequestType{
     RESERVE,
     CANCEL,
     QUERY,
-    MODIFY
+    MODIFY_QUANTITY,
+    MODIFY_OCCURRENCE
 };
 
 struct Request{
