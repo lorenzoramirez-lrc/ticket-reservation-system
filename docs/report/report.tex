@@ -21,7 +21,7 @@
     Introducción Sistemas Distribuidos \\
     Mariela Curiel Huerfano \\ 
     Bogota, Colombia \\
-    11 de septiembre, 2026
+    11 de octubre, 2026
 }
 
 \author{}
@@ -57,14 +57,32 @@ La tercera y última capa es la capa de servicios de almacenamiento que se encar
 la base de datos principal.
 
 \subsection{Interacción}
+La interacción en el sistema de reservas es hecha a través del paso de mensajes de forma acoplada y desacoplada en el
+tiempo e inicialmente acoplada en el espacio. Este modelo de interacción permite cumplir con los requerimientos del
+sistema en cuanto a la naturaleza de solicitudes de cancelación las cuales deben ser asíncronas (no bloqueantes) y el
+resto de transacciones de reserva de eventos las cuales son síncronas al esperar la confirmación de las capas subsecuentes.
+Considerando la arquitectura inicial donde cada servicio tiene una sola réplica sin tener en cuenta aun los
+componentes de escalabilidad y tolerancia a fallos el sistema será por naturaleza acoplado en el espacio.
+
 \subsection{Fallos}
 \subsection{Seguridad}
 
 
 \section{Diseño del sistema}
 
+El diseño del sistema refleja la arquitectura base planteada. Este cumple con los requerimientos
+de despliegue fisico y separacion de responsabilidades permitiendo las diferentes interacciones que 
+los clientes pueden tener con el servidor.
 
 \subsection{Despliegue}
+
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{despliegue.png}}
+    \caption{Diagrama de despliegue.}
+    \label{DiagramaDespliegue}
+\end{figure}
+
 
 \subsection{Componentes}
 
