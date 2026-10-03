@@ -48,6 +48,15 @@ std::string checkReservation(zmq::socket_t &persistenceSocket, std::string reser
     return sendPersistence(persistenceSocket, check_reservation);
 }
 
+std::string checkOccurrences(zmq::socket_t &persistenceSocket, std::string eventID, std::string occurrenceID){
+    Request check_occurrence{};
+    check_occurrence.request = CHECK_OCCURRENCES;
+    copy(check_occurrence.eventID, eventID);
+    copy(check_occurrence.occurrenceID, occurrenceID);
+
+    return sendPersistence(persistenceSocket, check_occurrence);
+}
+
 
 std::string reserveSeats (zmq::socket_t &persistenceSocket, std::string clientID, std::string eventID, std::string occurenceID, int quantity){
     std::string check = checkSeats(persistenceSocket, eventID, occurenceID, quantity);
@@ -83,9 +92,12 @@ std::string modifyQuantity (zmq::socket_t &persistenceSocket, std::string client
     return sendPersistence(persistenceSocket, modify);
 }
 
-std::string modifyOccurrence (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID){
+std::string modifyOccurrence (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID, std::string eventID, std::string occurrenceID){
     std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
     if(check_res != "OK") return check_res;
+
+    std::string check_occ = checkOccurrences(persistenceSocket, eventID, occurrenceID);
+    if(check_occ != "OK") return check_occ;
 
     Request modify{};
     modify.request = MODIFY_OCCURRENCE;
@@ -135,7 +147,8 @@ int main(){
                 break;
 
             case MODIFY_OCCURRENCE:
-                transactionResponse = modifyOccurrence(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID);
+                transactionResponse = modifyOccurrence(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID,
+                        structuredRequest.eventID, structuredRequest.occurrenceID);
                 break;
 
             case MODIFY_QUANTITY:
