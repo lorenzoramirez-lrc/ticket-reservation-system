@@ -32,10 +32,10 @@ int main(){
 
         auto result = gestorSocket.recv(gestorRequest, zmq::recv_flags::none);
 
-        if(!result || gestorRequest.size()==0) continue;
+        if(!result || gestorRequest.size() != sizeof(Request)) continue;
 
         Request structuredRequest; 
-        memcpy(&structuredRequest, gestorRequest.data(), sizeof(gestorRequest));
+        memcpy(&structuredRequest, gestorRequest.data(), sizeof(Request));
         
         std::string transactionResponse{};
 

@@ -29,10 +29,10 @@ int main(){
 
         auto result  = clientSocket.recv(clientRequest, zmq::recv_flags::none);
 
-        if(!result || clientRequest.size()==0) continue;
+        if(!result || clientRequest.size() != sizeof(Request)) continue;
 
         Request structuredRequest; 
-        memcpy(&structuredRequest, clientRequest.data(), sizeof(clientRequest));
+        memcpy(&structuredRequest, clientRequest.data(), sizeof(Request));
 
         std::string transactionResponse{};
 
