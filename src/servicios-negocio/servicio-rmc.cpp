@@ -25,7 +25,7 @@ int main(){
     gestorSocket.bind("tcp://10.43.100.20:7777");
 
     zmq::socket_t persistenciaSocket(contextZMQ, zmq::socket_type::req);
-    persistenciaSocket.bind("tcp://10.43.100.34:8888");
+    persistenciaSocket.connect("tcp://10.43.100.34:8888");
 
     while(true){
         zmq::message_t gestorRequest;

@@ -22,7 +22,7 @@ int main(){
     clientSocket.bind("tcp://10.43.99.201:5555");
 
     zmq::socket_t rmcSocket(contextZMQ, zmq::socket_type::req);
-    clientSocket.bind("tcp://10.43.100.20:7777");
+    clientSocket.connect("tcp://10.43.100.20:7777");
 
     while(true){
         zmq::message_t clientRequest;
