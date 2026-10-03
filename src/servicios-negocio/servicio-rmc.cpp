@@ -130,20 +130,21 @@ int main(){
 
         switch(structuredRequest.request){
             case RESERVE:
-                reserveSeats(persistenceSocket, structuredRequest.clientID, structuredRequest.eventID, structuredRequest.occurrenceID, std::stoi(structuredRequest.quantity));
+                transactionResponse = reserveSeats(persistenceSocket, structuredRequest.clientID, 
+                        structuredRequest.eventID, structuredRequest.occurrenceID, std::stoi(structuredRequest.quantity));
                 break;
 
             case MODIFY_OCCURRENCE:
-                modifyOccurrence(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID);
+                transactionResponse = modifyOccurrence(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID);
                 break;
 
             case MODIFY_QUANTITY:
-                modifyQuantity(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID, std::stoi(structuredRequest.quantity),
-                        structuredRequest.eventID,structuredRequest.occurrenceID);
+                transactionResponse = modifyQuantity(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID, 
+                        std::stoi(structuredRequest.quantity), structuredRequest.eventID,structuredRequest.occurrenceID);
                 break;
 
             case QUERY:
-                checkEvents(persistenceSocket, structuredRequest.month);
+                transactionResponse = checkEvents(persistenceSocket, structuredRequest.month);
                 break;
 
             default:
