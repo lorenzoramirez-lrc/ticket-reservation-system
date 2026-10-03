@@ -1,7 +1,7 @@
 #include <string>
 #include <cstring>
 
-enum RequestType { RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS };
+enum RequestType { RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_RESERVATION };
 
 struct Request {
     RequestType request;

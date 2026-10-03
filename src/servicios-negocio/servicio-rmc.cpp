@@ -1,3 +1,4 @@
+#include <string>
 #include <zmq.hpp>
 #include "../request-structs/structs.cpp"
 
@@ -6,63 +7,143 @@ void sendResponse(zmq::socket_t &socket, const std::string &response) {
     socket.send(reply, zmq::send_flags::none);
 }
 
-std::string reservarAsientos (std::string idCliente, std::string idEvento, std::string idOcurrencia, int cantidad){
+std::string sendPersistence(zmq::socket_t &persistenceSocket, const Request &req) {
+    zmq::message_t message(sizeof(Request));
+    memcpy(message.data(), &req, sizeof(Request));
+    persistenceSocket.send(message, zmq::send_flags::none);
+
+    zmq::message_t response;
+    auto result = persistenceSocket.recv(response, zmq::recv_flags::none);
+    if (!result) return "ERROR: sin respuesta de persistencia";
+
+    return std::string(static_cast<char*>(response.data()), response.size());
+}
+
+std::string checkSeats(zmq::socket_t &persistenceSocket, std::string eventID, std::string occurenceID, int quantity){
+    Request check_seats{};
+    check_seats.request = CHECK_SEATS;
+    copy(check_seats.eventID, eventID);
+    copy(check_seats.occurrenceID, occurenceID);
+
+    std::string response = sendPersistence(persistenceSocket, check_seats);
+
+    int available;
+    try {
+        available = std::stoi(response);
+    }catch (...){
+        return response; //Llega un error 
+    }
     
+    if (available < quantity) return "ERROR: Asientos insuficientes";
+
+    return "OK";
 }
 
-std::string modificarAsientos (std::string idCliente, std::string idReserva, int nuevaCantidad){
+std::string checkReservation(zmq::socket_t &persistenceSocket, std::string reservationID, std::string clientID){
+    Request check_reservation{};
+    check_reservation.request = CHECK_RESERVATION;
+    copy(check_reservation.reservationID, reservationID);
+    copy(check_reservation.clientID, clientID);
 
+    return sendPersistence(persistenceSocket, check_reservation);
 }
 
-std::string modificarOcurrencia (std::string idCliente, std::string idReserva){
 
+std::string reserveSeats (zmq::socket_t &persistenceSocket, std::string clientID, std::string eventID, std::string occurenceID, int quantity){
+    std::string check = checkSeats(persistenceSocket, eventID, occurenceID, quantity);
+
+    if (check != "OK") return check;
+
+    Request reserve{};
+    reserve.request = RESERVE;
+    copy(reserve.clientID, clientID);
+    copy(reserve.eventID, eventID);
+    copy(reserve.occurrenceID, occurenceID);
+    copy(reserve.quantity, std::to_string(quantity));
+
+    return sendPersistence(persistenceSocket, reserve);
 }
 
-std::string consultarEventos (std::string mes){
+std::string modifyQuantity (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID, int newQuantity, std::string eventID, std::string occurenceID){
+    //Verificar reserva existente y despues asientos disponibles
+    std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
+    if(check_res != "OK") return check_res;
 
+    std::string check_seats = checkSeats(persistenceSocket, eventID, occurenceID, newQuantity);
+    if (check_seats != "OK") return check_seats;
+
+    Request modify{};
+    modify.request = MODIFY_QUANTITY;
+    copy(modify.clientID, clientID);
+    copy(modify.eventID, eventID);
+    copy(modify.occurrenceID, occurenceID);
+    copy(modify.quantity, std::to_string(newQuantity));
+    copy(modify.reservationID, reservationID);
+
+    return sendPersistence(persistenceSocket, modify);
+}
+
+std::string modifyOccurrence (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID){
+    std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
+    if(check_res != "OK") return check_res;
+
+    Request modify{};
+    modify.request = MODIFY_OCCURRENCE;
+    copy(modify.clientID, clientID);
+    copy(modify.reservationID, reservationID);
+
+    return sendPersistence(persistenceSocket, modify);
+}
+
+std::string checkEvents (zmq::socket_t &persistenceSocket, std::string month){
+    Request events{};
+    events.request = QUERY;
+    copy(events.month, month);
+
+    return sendPersistence(persistenceSocket, events);
 }
 
 int main(){
-
     zmq::context_t contextZMQ(1);
-    zmq::socket_t gestorSocket(contextZMQ, zmq::socket_type::rep);
-    gestorSocket.bind("tcp://10.43.100.20:7777");
+    zmq::socket_t managerSocket(contextZMQ, zmq::socket_type::rep);
+    managerSocket.bind("tcp://10.43.100.20:7777");
 
-    zmq::socket_t persistenciaSocket(contextZMQ, zmq::socket_type::req);
-    persistenciaSocket.connect("tcp://10.43.100.34:8888");
+    zmq::socket_t persistenceSocket(contextZMQ, zmq::socket_type::req);
+    persistenceSocket.connect("tcp://10.43.100.34:8888");
 
     while(true){
-        zmq::message_t gestorRequest;
+        zmq::message_t managerRequest;
 
-        auto result = gestorSocket.recv(gestorRequest, zmq::recv_flags::none);
+        auto result = managerSocket.recv(managerRequest, zmq::recv_flags::none);
 
         if(!result) continue;
 
-        if (gestorRequest.size() != sizeof(Request)){
-            sendResponse(gestorSocket, "ERROR: Solicitud invalida");
+        if (managerRequest.size() != sizeof(Request)){
+            sendResponse(managerSocket, "ERROR: Solicitud invalida");
             continue;
         }
 
         Request structuredRequest; 
-        memcpy(&structuredRequest, gestorRequest.data(), sizeof(Request));
+        memcpy(&structuredRequest, managerRequest.data(), sizeof(Request));
         
         std::string transactionResponse{};
 
         switch(structuredRequest.request){
             case RESERVE:
-                reservarAsientos(structuredRequest.clientID, structuredRequest.eventID, structuredRequest.occurrenceID, std::stoi(structuredRequest.quantity));
+                reserveSeats(persistenceSocket, structuredRequest.clientID, structuredRequest.eventID, structuredRequest.occurrenceID, std::stoi(structuredRequest.quantity));
                 break;
 
             case MODIFY_OCCURRENCE:
-                modificarOcurrencia(structuredRequest.clientID, structuredRequest.reservationID);
+                modifyOccurrence(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID);
                 break;
 
             case MODIFY_QUANTITY:
-                modificarAsientos(structuredRequest.clientID, structuredRequest.reservationID, std::stoi(structuredRequest.quantity));
+                modifyQuantity(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID, std::stoi(structuredRequest.quantity),
+                        structuredRequest.eventID,structuredRequest.occurrenceID);
                 break;
 
             case QUERY:
-                consultarEventos(structuredRequest.month);
+                checkEvents(persistenceSocket, structuredRequest.month);
                 break;
 
             default:
@@ -70,7 +151,7 @@ int main(){
                 break;
         }
 
-        sendResponse(gestorSocket, transactionResponse);
+        sendResponse(managerSocket, transactionResponse);
 
 
     }
