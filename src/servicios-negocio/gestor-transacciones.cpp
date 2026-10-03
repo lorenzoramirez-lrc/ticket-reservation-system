@@ -29,7 +29,12 @@ int main(){
 
         auto result  = clientSocket.recv(clientRequest, zmq::recv_flags::none);
 
-        if(!result || clientRequest.size() != sizeof(Request)) continue;
+        if(!result) continue;
+
+        if(clientRequest.size() != sizeof(Request)){
+            clientSocket.send(zmq::str_buffer("ERROR: solicitud invalida"), zmq::send_flags::none);
+            continue;
+        };
 
         Request structuredRequest; 
         memcpy(&structuredRequest, clientRequest.data(), sizeof(Request));

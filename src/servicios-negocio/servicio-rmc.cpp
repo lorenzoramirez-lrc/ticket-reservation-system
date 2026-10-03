@@ -1,6 +1,10 @@
-#include <iostream>
 #include <zmq.hpp>
 #include "../request-structs/structs.cpp"
+
+void sendResponse(zmq::socket_t &socket, const std::string &response) {
+    zmq::message_t reply(response.data(), response.size());
+    socket.send(reply, zmq::send_flags::none);
+}
 
 std::string reservarAsientos (std::string idCliente, std::string idEvento, std::string idOcurrencia, int cantidad){
     
@@ -32,7 +36,12 @@ int main(){
 
         auto result = gestorSocket.recv(gestorRequest, zmq::recv_flags::none);
 
-        if(!result || gestorRequest.size() != sizeof(Request)) continue;
+        if(!result) continue;
+
+        if (gestorRequest.size() != sizeof(Request)){
+            sendResponse(gestorSocket, "ERROR: Solicitud invalida");
+            continue;
+        }
 
         Request structuredRequest; 
         memcpy(&structuredRequest, gestorRequest.data(), sizeof(Request));
@@ -57,8 +66,11 @@ int main(){
                 break;
 
             default:
+                transactionResponse = "ERROR: Solicitud desconocida";
                 break;
         }
+
+        sendResponse(gestorSocket, transactionResponse);
 
 
     }
