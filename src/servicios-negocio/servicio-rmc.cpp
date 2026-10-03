@@ -1,5 +1,6 @@
 #include <string>
 #include <zmq.hpp>
+#include <cstring>
 #include "../request-structs/structs.cpp"
 
 void sendResponse(zmq::socket_t &socket, const std::string &response) {
@@ -74,12 +75,20 @@ std::string reserveSeats (zmq::socket_t &persistenceSocket, std::string clientID
 }
 
 std::string modifyQuantity (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID, int newQuantity, std::string eventID, std::string occurenceID){
-    //Verificar reserva existente y despues asientos disponibles
     std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
-    if(check_res != "OK") return check_res;
 
-    std::string check_seats = checkSeats(persistenceSocket, eventID, occurenceID, newQuantity);
-    if (check_seats != "OK") return check_seats;
+    int current;
+    try {
+        current = std::stoi(check_res);
+    }catch (...) {
+        return check_res;   
+    }
+
+    int extra = newQuantity - current;
+    if (extra > 0){
+        std::string check_seats = checkSeats(persistenceSocket, eventID, occurenceID, newQuantity);
+        if (check_seats != "OK") return check_seats;
+    }
 
     Request modify{};
     modify.request = MODIFY_QUANTITY;
@@ -94,15 +103,26 @@ std::string modifyQuantity (zmq::socket_t &persistenceSocket, std::string client
 
 std::string modifyOccurrence (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID, std::string eventID, std::string occurrenceID){
     std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
-    if(check_res != "OK") return check_res;
+
+    int current;
+    try {
+        current = std::stoi(check_res);
+    }catch (...) {
+        return check_res;   
+    }
 
     std::string check_occ = checkOccurrences(persistenceSocket, eventID, occurrenceID);
     if(check_occ != "OK") return check_occ;
+
+    std::string check_seats = checkSeats(persistenceSocket, eventID, occurrenceID, current);
+    if (check_seats != "OK") return check_seats;
 
     Request modify{};
     modify.request = MODIFY_OCCURRENCE;
     copy(modify.clientID, clientID);
     copy(modify.reservationID, reservationID);
+    copy(modify.eventID, eventID);
+    copy(modify.occurrenceID, occurrenceID);
 
     return sendPersistence(persistenceSocket, modify);
 }
