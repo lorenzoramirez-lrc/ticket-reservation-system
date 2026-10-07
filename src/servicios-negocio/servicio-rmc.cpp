@@ -69,7 +69,7 @@ std::string reserveSeats (zmq::socket_t &persistenceSocket, std::string clientID
     copy(reserve.clientID, clientID);
     copy(reserve.eventID, eventID);
     copy(reserve.occurrenceID, occurenceID);
-    copy(reserve.quantity, std::to_string(quantity));
+    reserve.quantity = quantity;
 
     return sendPersistence(persistenceSocket, reserve);
 }
@@ -95,7 +95,7 @@ std::string modifyQuantity (zmq::socket_t &persistenceSocket, std::string client
     copy(modify.clientID, clientID);
     copy(modify.eventID, eventID);
     copy(modify.occurrenceID, occurenceID);
-    copy(modify.quantity, std::to_string(newQuantity));
+    modify.quantity = newQuantity;
     copy(modify.reservationID, reservationID);
 
     return sendPersistence(persistenceSocket, modify);
@@ -163,7 +163,7 @@ int main(){
         switch(structuredRequest.request){
             case RESERVE:
                 transactionResponse = reserveSeats(persistenceSocket, structuredRequest.clientID, 
-                        structuredRequest.eventID, structuredRequest.occurrenceID, std::stoi(structuredRequest.quantity));
+                        structuredRequest.eventID, structuredRequest.occurrenceID, structuredRequest.quantity);
                 break;
 
             case MODIFY_OCCURRENCE:
@@ -173,7 +173,7 @@ int main(){
 
             case MODIFY_QUANTITY:
                 transactionResponse = modifyQuantity(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID, 
-                        std::stoi(structuredRequest.quantity), structuredRequest.eventID,structuredRequest.occurrenceID);
+                        structuredRequest.quantity, structuredRequest.eventID,structuredRequest.occurrenceID);
                 break;
 
             case QUERY:

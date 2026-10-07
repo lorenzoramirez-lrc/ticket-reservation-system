@@ -9,7 +9,7 @@ struct Request {
     char eventID[32];
     char occurrenceID[32];
     char reservationID[32];
-    char quantity[16];
+    int quantity;
     char month[16];
 };
 
