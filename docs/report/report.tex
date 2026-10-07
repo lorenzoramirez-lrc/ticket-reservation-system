@@ -2,6 +2,8 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{multirow}
 \graphicspath{{figures/}}
 \usepackage{textcomp}
 \usepackage{xcolor}
@@ -47,34 +49,56 @@ es la capa de consumidores donde los procesos clientes solicitan transacciones a
 pueden ser reservas de asientos, modificaciones de reserva, consulta de eventos en un determinado mes o cancelaciones
 de reserva.
 
-La segunda capa es la capa de servicios de negocio donde se encuentra el gestor de transacciones encargado de enrutar
-las peticiones por el canal síncrono si se tratan de reservas, consultas o modificaciones, o las enruta por el canal 
+La segunda capa es la capa de servicios de negocio donde se encuentra el gestor de transacciones encargado de
+recibir las solicitudes de los clientes y decidir el servicio de procesamiento y canal que se utilizara para la solicitud.
+Las peticiones serán dirigidas por el canal síncrono si se tratan de reservas, consultas o modificaciones, o por el canal 
 asíncrono si es una petición de cancelación. Las peticiones síncronas son procesadas por el servicio de procesamiento
 de reservas/modificaciones/consultas  (RMC), mientras que las peticiones asíncronas son procesadas por el servicio de 
 cancelaciones y notificaciones.
 
 La tercera y última capa es la capa de servicios de almacenamiento que se encarga del manejo de transacciones sobre
-la base de datos principal.
+la base de datos principal al recibir solicitudes de escritura y lectura de ambos servicios de procesamiento.
 
 \subsection{Interacción}
-La interacción en el sistema de reservas es hecha a través del paso de mensajes de forma acoplada y desacoplada en el
-tiempo e inicialmente acoplada en el espacio. Este modelo de interacción permite cumplir con los requerimientos del
-sistema en cuanto a la naturaleza de solicitudes de cancelación las cuales deben ser asíncronas (no bloqueantes) y el
+
+El sistema es un sistema distribuido asincrónico debido a que no hay limitaciones en los tiempos de ejecución de
+procesos del sistema ni en los retardos en transmisión de mensajes. Asimismo no se asumen límites conocidos en las tasas de deriva
+de los relojes locales de cada proceso. Esta decisión refleja la naturaleza inherentemente impredecible de la red y los sistemas
+distribuidos, esto permite que el diseño posea una mejor tolerancia a fallos y escalabilidad al no depender de restricciones
+temporales estrictas en los componentes.
+
+La interacción en relación con el envío de mensajes utiliza mecanismos de comunicación acoplados y desacoplados en el
+tiempo e inicialmente acoplados en el espacio. Este modelo de comunicación permite cumplir con los requerimientos del
+sistema en cuanto a las solicitudes de cancelación las cuales deben ser asíncronas (no bloqueantes) y el
 resto de transacciones de reserva de eventos las cuales son síncronas al esperar la confirmación de las capas subsecuentes.
-Considerando la arquitectura inicial donde cada servicio tiene una sola réplica sin tener en cuenta aun los
-componentes de escalabilidad y tolerancia a fallos el sistema será por naturaleza acoplado en el espacio.
+La arquitectura inicial es acoplada en el espacio dado que los servicios se encuentran direccionados directamente y cada uno
+cuenta con una sola réplica. Este acoplamiento temporal será reducido posteriormente al considerar componentes de
+escalabilidad y tolerancia a fallos, puesto que las solicitudes serán distribuidas a través de diferentes instancias de los servicios.
+
 
 \subsection{Fallos}
+
+
 \subsection{Seguridad}
 
 
 \section{Diseño del sistema}
 
 El diseño del sistema refleja la arquitectura base planteada. Este cumple con los requerimientos
-de despliegue fisico y separacion de responsabilidades permitiendo las diferentes interacciones que 
+de despliegue físico y separación de responsabilidades permitiendo las diferentes interacciones que 
 los clientes pueden tener con el servidor.
 
 \subsection{Despliegue}
+
+El diagrama de despliegue expone la distribución física del sistema a través de tres máquinas distintas cada
+una siendo una capa de la arquitectura del sistema. De este diagrama se debe destacar los protocolos de comunicación
+seleccionados teniendo en cuenta el aspecto sincrónico y asincrónico del sistema. Para ello se utiliza el protocolo
+sincrónico REQ/REP de ZeroMQ para todo el flujo de solicitudes sincrónicas. En el caso de cancelación el cual debe
+ser asincrónico para el cliente se manejan distintos protocolos teniendo en cuenta los requerimientos de comunicación
+entre servicios para ello se usa
+el patrón Router/Dealer para las notificaciones al cliente una vez hecha la cancelación y el llamado al gestor de transacciones al
+cliente. Asimismo se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional
+y división de tareas considerando las modificaciones a futuro para la escalabilidad del sistema.
 
 
 \begin{figure}[htbp]
@@ -92,9 +116,63 @@ los clientes pueden tener con el servidor.
 
 \section{Escalabilidad y tolerancia a fallos}
 
+La escalabilidad y tolerancia a fallos sera llevada a cabo 
+
+
+
 \section{Protocolo de pruebas}
 
-\section{Metricas}
+El protocolo de pruebas del sistema contempla diferentes niveles de validacion para asegurar su correcto
+funcionamiento y posterior medicion de rendimiento ante diferentes cargas y tolerancia a fallos.
+
+Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios
+
+
+
+
+En relacion a las pruebas del sistema distribuido se realizaran pruebas concurrentes con diferentes numeros de clientes 
+que realicen operaciones simultaneamente. De esta manera se evaluara el comportamiento y rendimiento
+del sistema ante diferentes cargas de operaciones. Como se muestra en la Tabla \ref{tab:pruebas_rendimiento} 
+se obtendran metricas que evaluen y comparen el diseño de la arquitectura base y la arquitectura escalable 
+propuesta en la seccion anterior. Cada prueba de carga contempla una generacion de operaciones por parte de los clientes 
+de 3 minutos.
+
+Asimismo se considerara una prueba de fallo y resilencia mediante la interrupcion voluntaria del Gestor de Transacciones.
+Ante esta falla se espera que el sistema instancie un nuevo proceso que sustituya al servicio.
+En esta prueba se evaluara que el servicio pueda retomar la operacion del sistema, siendo esta falla transparente para el cliente
+al poder retomar las operaciones desde la interrupcion.
+
+
+\begin{table}[htpb]
+\centering
+\caption{Pruebas de rendimiento}
+\label{tab:pruebas_rendimiento}
+\begin{tabularx}{\columnwidth}{|X|X|}
+\hline
+\textbf{Carga} & \textbf{Métricas} \\ \hline
+
+3 clientes: 2 consultas y 1 consulta con reserva
+&
+\multirow{3}{\linewidth}{%
+Tiempo promedio y desviación estándar de consultas y reservas. 
+Transacciones por minuto de consultas y reservas.
+}
+\\ \cline{1-1}
+
+5 clientes: 3 consultas y 2 reservas y modificaciones.
+&
+\\ \cline{1-1}
+
+8 clientes: 4 consultas y 4 reservas y modificaciones.
+&
+\\ \hline
+
+\end{tabularx}
+\end{table}
+
+
+
+\section{Estrategias de obtencion de metricas}
 
 \section{Generacion de carga clientes}
 
