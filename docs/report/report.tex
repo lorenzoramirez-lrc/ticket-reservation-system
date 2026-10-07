@@ -2,6 +2,7 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
+\usepackage{multirow}
 \graphicspath{{figures/}}
 \usepackage{textcomp}
 \usepackage{xcolor}
@@ -114,9 +115,64 @@ y división de tareas considerando las modificaciones a futuro para la escalabil
 
 \section{Escalabilidad y tolerancia a fallos}
 
+La escalabilidad y tolerancia a fallos sera llevada a cabo 
+
+
+
 \section{Protocolo de pruebas}
 
-\section{Metricas}
+El protocolo de pruebas del sistema contempla diferentes niveles de validacion para asegurar su correcto
+funcionamiento y posterior medicion de rendimiento ante diferentes cargas y tolerancia a fallos.
+
+Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios
+
+
+
+
+En relacion a pruebas inherentes al sistema distribuido se realizaran pruebas concurrentes ante diferentes numeros de clientes 
+que realicen operaciones simultaneas. De esa manera se podra evaluar el comportamiento del sistema, y su 
+rendimiento ante las diferentes cargas de operaciones. Como se muestra en la Tabla \ref{tab:pruebas_rendimiento} se 
+obtendran diferentes metricas que evaluen y comparen el diseño de la arquitectura base y la arquitectura escalable 
+propuesta en la seccion anterior. Cada prueba de carga contempla una generacion de operaciones por parte de los clientes 
+de 3 minutos.
+
+Para las pruebas de tolerancia a fallos 
+
+\begin{table}[htbp]
+\caption{Pruebas de rendimiento}
+\centering
+\begin{tabular}{|p{5cm}|p{3.0cm}|}
+\hline
+\textbf{Carga} & \textbf{Métricas} \\ \hline
+
+3 clientes: 2 consultas y 1 consultas y reservas.
+&
+\multirow{3}{*}{
+\parbox{5cm}{
+Tiempo promedio \\ 
+y desviación estándar \\
+de consultas y reservas. \\
+Transacciones por minuto \\
+de consultas y reservas.
+}
+}
+\\ \cline{1-1}
+
+5 clientes: 3 consultas y 2 reservas y modificaciones.
+&
+\\ \cline{1-1}
+
+8 clientes: 4 consultas y 4 reservas y modificaciones.
+&
+\\ \hline
+
+\end{tabular}
+\label{tab:pruebas_rendimiento}
+\end{table}
+
+
+
+\section{Estrategias de obtencion de metricas}
 
 \section{Generacion de carga clientes}
 
