@@ -27,7 +27,7 @@ std::string checkSeats(pqxx::connection& db, const std::string& eventID,
     auto r = tx.exec_params(
         "SELECT capacity - occupied_seats AS free_seats FROM event_occurrences "
         "WHERE occurrence_id = $1 AND event_id = $2", occurrenceID, eventID);
-    if (r.empty()) return err("la ocurrencia no existe para ese evento");
+    if (r.empty()) return err("ERROR: la ocurrencia no existe para ese evento");
     return std::to_string(r[0]["free_seats"].as<int>());
 }
 
@@ -39,7 +39,7 @@ std::string checkReservation(pqxx::connection& db, const std::string& reservatio
         "SELECT seat_count FROM reservations "
         "WHERE reservation_id = $1 AND client_id = $2 AND status = 'ACTIVE'",
         reservationID, clientID);
-    if (r.empty()) return err("la reserva no existe, esta cancelada o no es del cliente");
+    if (r.empty()) return err("ERROR: la reserva no existe, esta cancelada o no es del cliente");
     return std::to_string(r[0]["seat_count"].as<int>());
 }
 
@@ -50,7 +50,7 @@ std::string checkOccurrence(pqxx::connection& db, const std::string& eventID,
     auto r = tx.exec_params(
         "SELECT 1 FROM event_occurrences WHERE occurrence_id = $1 AND event_id = $2",
         occurrenceID, eventID);
-    if (r.empty()) return err("la ocurrencia no existe para ese evento");
+    if (r.empty()) return err("ERROR: la ocurrencia no existe para ese evento");
     return "OK";
 }
 
@@ -80,7 +80,7 @@ std::string queryEvents(pqxx::connection& db, int month) {
 std::string reserveSeats(pqxx::connection& db, const std::string& clientID,
                          const std::string& eventID, const std::string& occurrenceID,
                          int quantity) {
-    if (quantity <= 0) return err("cantidad invalida");
+    if (quantity <= 0) return err("ERROR: cantidad invalida");
     pqxx::work tx(db);
 
     auto upd = tx.exec_params(
@@ -88,7 +88,7 @@ std::string reserveSeats(pqxx::connection& db, const std::string& clientID,
         "WHERE occurrence_id = $2 AND event_id = $3 AND occupied_seats + $1 <= capacity",
         quantity, occurrenceID, eventID);
     if (upd.affected_rows() != 1)
-        return err("sin cupo o la ocurrencia no existe");      // sin commit: rollback
+        return err("ERROR: sin cupo o la ocurrencia no existe");      // sin commit: rollback
 
     auto ins = tx.exec_params(
         "INSERT INTO reservations(reservation_id, occurrence_id, client_id, seat_count) "
@@ -105,7 +105,7 @@ std::string reserveSeats(pqxx::connection& db, const std::string& clientID,
 std::string modifyQuantity(pqxx::connection& db, const std::string& reservationID,
                            const std::string& clientID, const std::string& eventID,
                            const std::string& occurrenceID, int newQuantity) {
-    if (newQuantity <= 0) return err("cantidad invalida");
+    if (newQuantity <= 0) return err("ERROR: cantidad invalida");
     pqxx::work tx(db);
 
     auto cur = tx.exec_params(
@@ -114,7 +114,7 @@ std::string modifyQuantity(pqxx::connection& db, const std::string& reservationI
         "WHERE r.reservation_id = $1 AND r.client_id = $2 AND r.status = 'ACTIVE' "
         "  AND r.occurrence_id = $3 AND o.event_id = $4 FOR UPDATE OF r",
         reservationID, clientID, occurrenceID, eventID);
-    if (cur.empty()) return err("la reserva no existe, esta cancelada o no coincide");
+    if (cur.empty()) return err("ERROR: la reserva no existe, esta cancelada o no coincide");
 
     int delta = newQuantity - cur[0]["seat_count"].as<int>();
     if (delta == 0) return "OK";
@@ -123,7 +123,7 @@ std::string modifyQuantity(pqxx::connection& db, const std::string& reservationI
         "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
         "WHERE occurrence_id = $2 AND occupied_seats + $1 <= capacity",
         delta, occurrenceID);
-    if (upd.affected_rows() != 1) return err("sin cupo para la nueva cantidad");
+    if (upd.affected_rows() != 1) return err("ERROR: sin cupo para la nueva cantidad");
 
     tx.exec_params("UPDATE reservations SET seat_count = $2 WHERE reservation_id = $1",
                    reservationID, newQuantity);
@@ -143,18 +143,18 @@ std::string modifyOccurrence(pqxx::connection& db, const std::string& reservatio
         "WHERE r.reservation_id = $1 AND r.client_id = $2 AND r.status = 'ACTIVE' "
         "  AND o.event_id = $3 FOR UPDATE OF r",
         reservationID, clientID, eventID);
-    if (cur.empty()) return err("la reserva no existe, esta cancelada o no es de ese evento");
+    if (cur.empty()) return err("ERROR: la reserva no existe, esta cancelada o no es de ese evento");
 
     auto oldOcc = cur[0]["occurrence_id"].as<std::string>();
     int  seats  = cur[0]["seat_count"].as<int>();
-    if (oldOcc == occurrenceID) return err("la reserva ya esta en esa ocurrencia");
+    if (oldOcc == occurrenceID) return err("ERROR: la reserva ya esta en esa ocurrencia");
 
     auto take = tx.exec_params(
         "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
         "WHERE occurrence_id = $2 AND event_id = $3 AND occupied_seats + $1 <= capacity",
         seats, occurrenceID, eventID);
     if (take.affected_rows() != 1)
-        return err("sin cupo o la nueva ocurrencia no es de ese evento");
+        return err("ERROR: sin cupo o la nueva ocurrencia no es de ese evento");
 
     tx.exec_params("UPDATE event_occurrences SET occupied_seats = occupied_seats - $1 "
                    "WHERE occurrence_id = $2", seats, oldOcc);
@@ -173,7 +173,7 @@ std::string cancelReservation(pqxx::connection& db, const std::string& reservati
         "UPDATE reservations SET status = 'CANCELLED' "
         "WHERE reservation_id = $1 AND client_id = $2 AND status = 'ACTIVE' "
         "RETURNING occurrence_id, seat_count", reservationID, clientID);
-    if (r.empty()) return err("la reserva no existe, ya esta cancelada o no es del cliente");
+    if (r.empty()) return err("ERROR: la reserva no existe, ya esta cancelada o no es del cliente");
 
     tx.exec_params("UPDATE event_occurrences SET occupied_seats = occupied_seats - $1 "
                    "WHERE occurrence_id = $2",
@@ -210,7 +210,7 @@ std::string atender(pqxx::connection& db, const Request& q) {
         default:
             break;
     }
-    return err("solicitud desconocida");
+    return err("ERROR: solicitud desconocida");
 }
 
 int main() {
@@ -229,7 +229,7 @@ int main() {
 
         std::string resp;
         if (msg.size() != sizeof(Request)) {
-            resp = err("solicitud invalida");
+            resp = err("ERROR: solicitud invalida");
         } else {
             Request q{};
             memcpy(&q, msg.data(), sizeof(Request));
