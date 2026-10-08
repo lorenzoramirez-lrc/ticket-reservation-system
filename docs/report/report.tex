@@ -62,7 +62,7 @@ la base de datos principal al recibir solicitudes de escritura y lectura de ambo
 \subsection{Interacción}
 
 El sistema es un sistema distribuido asincrónico debido a que no hay limitaciones en los tiempos de ejecución de
-procesos del sistema ni en los retardos en transmisión de mensajes. Asimismo no se asumen límites conocidos en las tasas de deriva
+procesos del sistema ni en los retardos en transmisión de mensajes. Del mismo modo, no se asumen límites conocidos en las tasas de deriva
 de los relojes locales de cada proceso. Esta decisión refleja la naturaleza inherentemente impredecible de la red y los sistemas
 distribuidos, esto permite que el diseño posea una mejor tolerancia a fallos y escalabilidad al no depender de restricciones
 temporales estrictas en los componentes.
@@ -78,6 +78,20 @@ escalabilidad y tolerancia a fallos, puesto que las solicitudes serán distribui
 
 \subsection{Fallos}
 
+El modelo de fallos contempla tanto fallos en la red como en cada uno de los procesos del sistema. Al ser un sistema
+con un modelo de interacción asincrónico, no existen límites superiores conocidos para el tiempo de ejecución de procesos
+o envió y recepción de mensaje. Por lo anterior no se consideran fallos de prestaciones, ya que no existe límites
+para determinar si una respuesta está fuera de los tiempos esperados. De igual forma, no se asume fallos tipo
+Fail/Stop, puesto que la inexistencia de límites temporales hace que no se pueda
+determinar con certeza si un proceso ha fallado o se ha ejecutado con retraso.
+
+Por lo anterior el sistema considera principalmente fallos de ruptura y omisión.
+Los fallos de ruptura corresponden a situaciones en las que un proceso como el Gestor de Transacciones pueden fallar.
+Por otro lado, los fallos de omisión contemplan situaciones en las que un mensaje no es enviado, se pierde durante la
+comunicación o no es recibido por su destinatario.
+
+Finalmente, los componentes del sistema se consideran libres de fallos bizantinos es decir que al fallar dejan de operar
+en vez de producir y enviar información arbitraria.
 
 \subsection{Seguridad}
 
@@ -90,14 +104,14 @@ los clientes pueden tener con el servidor.
 
 \subsection{Despliegue}
 
-El diagrama de despliegue expone la distribución física del sistema a través de tres máquinas distintas cada
+El diagrama de despliegue (Fig. \ref{DiagramaDespliegue}) expone la distribución física del sistema a través de tres máquinas distintas cada
 una siendo una capa de la arquitectura del sistema. De este diagrama se debe destacar los protocolos de comunicación
-seleccionados teniendo en cuenta el aspecto sincrónico y asincrónico del sistema. Para ello se utiliza el protocolo
+seleccionados teniendo en cuenta el modelo de comunicacion sincrónico y asincrónico del sistema. Para ello se utiliza el protocolo
 sincrónico REQ/REP de ZeroMQ para todo el flujo de solicitudes sincrónicas. En el caso de cancelación el cual debe
 ser asincrónico para el cliente se manejan distintos protocolos teniendo en cuenta los requerimientos de comunicación
-entre servicios para ello se usa
+entre servicios. Para ello se usa
 el patrón Router/Dealer para las notificaciones al cliente una vez hecha la cancelación y el llamado al gestor de transacciones al
-cliente. Asimismo se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional
+cliente. Ademas se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional
 y división de tareas considerando las modificaciones a futuro para la escalabilidad del sistema.
 
 
@@ -109,6 +123,23 @@ y división de tareas considerando las modificaciones a futuro para la escalabil
 
 
 \subsection{Componentes}
+
+El diagrama de componentes (Fig. \ref{DiagramaComponentes}), expone la distribucion logica del sistema de reserva. 
+En esta se evidencia las interfaces que expone cada uno de los componentes del sistema y sus respectivos consumidores.
+Estas siguen el flujo logico de los requerimientos del sistema, donde el cliente envia solicitudes al Gestor de Transacciones, 
+el cual redirige las las operaciones al Servicio de Cancelacion o RMC dependiendo del tipo de solicitud. 
+Ambos servicios utilizan la interfaz del servicio de persistencia para acceder a la informacion alamacenada de los eventos. 
+Finalmente, se evidencia la interfaz de notificacion expuesta por el cliente, la cual el servicio de cancelacion utiliza
+para enviar notificaciones de forma asincronica. 
+
+La definición de los métodos correspondientes a cada una de las interfaces se presenta en el diagrama de 
+clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y su respectiva implementación.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{componentes.png}}
+    \caption{Diagrama de componentes.}
+    \label{DiagramaComponentes}
+\end{figure}
 
 \subsection{Clases}
 
@@ -171,14 +202,18 @@ Transacciones por minuto de consultas y reservas.
 \end{table}
 
 \section{Estrategias de obtencion de metricas}
-Tanto en el caso de consultas como de reservas, se cronometra el tiempo de cada solicitud con time.perf_counter, 
-desde que el cliente envía la solicitud hasta que recibe respuesta del Gestor de Transacciones. Cada tiempo se 
-guarda en un archivo CSV junto con el tipo de operación, de este modo, con pandas se calculan el promedio y la desviación estándar 
-de cada tipo.
+Para obtener las metricas de desempeño se utilizara un generador de carga, Python y la libreria \texttt{pandas}.
+Estas seran hechas en el Cliente y el Gestor de Transacciones.
 
-Para las transacciones por minuto (TPM) se realiza la medición en el Gestor de Transacciones, que registra cada 
-solicitud atendida con su marca de tiempo y su tipo de operación en un archivo CSV. El TPM de consultas y de 
-reservas se calculan contando las transacciones de cada tipo dentro de una ventana de 2 minutos. 
+Para consultas y reservas se medira el tiempo de respuesta de cada solicitud en el cliente con \texttt{time.perf\_counter}, 
+tomando como inicio el envio de la solicitud al Gestor de Transacciones hasta que recibe su respectiva respuesta.
+Cada medicion sera almacenada en un archivo junto con el tipo de operación.
+Posteriorimente mediante \texttt{pandas} se calculara el promedio y la desviación estándar de cada tipo de operacion.
+
+Para las transacciones por minuto (TPM) se el Gestor de Transacciones registrara cada 
+solicitud atendida junto a su marca de tiempo y tipo de operación en un archivo. A partir de los registros
+se cuantifican las transacciones procesadas de cada tipo durante el periodo de medicion definidio en el plan de pruebas de 3 minutos,
+calculando finalmente la tasa de transacciones por minutuo.
 
 \section{Generacion de carga clientes}
 

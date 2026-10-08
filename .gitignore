@@ -12,6 +12,8 @@ report.pdf
 
 .venv/
 
+**/__pycache__/ 
+
 
 
 
