@@ -170,9 +170,15 @@ Transacciones por minuto de consultas y reservas.
 \end{tabularx}
 \end{table}
 
-
-
 \section{Estrategias de obtencion de metricas}
+Tanto en el caso de consultas como de reservas, se cronometra el tiempo de cada solicitud con time.perf_counter, 
+desde que el cliente envía la solicitud hasta que recibe respuesta del Gestor de Transacciones. Cada tiempo se 
+guarda en un archivo CSV junto con el tipo de operación, de este modo, con pandas se calculan el promedio y la desviación estándar 
+de cada tipo.
+
+Para las transacciones por minuto (TPM) se realiza la medición en el Gestor de Transacciones, que registra cada 
+solicitud atendida con su marca de tiempo y su tipo de operación en un archivo CSV. El TPM de consultas y de 
+reservas se calculan contando las transacciones de cada tipo dentro de una ventana de 2 minutos. 
 
 \section{Generacion de carga clientes}
 
