@@ -213,18 +213,30 @@ std::string atender(pqxx::connection& db, const Request& q) {
     return err("ERROR: solicitud desconocida");
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+
+
+    if(argc != 2){
+        std::cout<<"Error: Numero de argumentos incorrecto\n";
+        std::cout<<"Formato: "<<argv[0]<<" <ip-rmc>\n";
+        return 1;
+    }
+
+    std::string ipRMC= "tcp://";
+    ipRMC +=argv[1];
+    ipRMC +=":8888";
+
     const char* env = std::getenv("SRB_DB");
     std::string conninfo = env ? env : "host=localhost dbname=srb user=postgres password=srb";
     auto db = std::make_unique<pqxx::connection>(conninfo);
 
     zmq::context_t ctx(1);
-    zmq::socket_t sock(ctx, zmq::socket_type::rep);
-    sock.bind("tcp://*:8888");
+    zmq::socket_t rmcSocket(ctx, zmq::socket_type::rep);
+    rmcSocket.bind(ipRMC);
 
     while (true) {
         zmq::message_t msg;
-        auto result = sock.recv(msg, zmq::recv_flags::none);
+        auto result = rmcSocket.recv(msg, zmq::recv_flags::none);
         if (!result) continue;
 
         std::string resp;
@@ -246,6 +258,6 @@ int main() {
             }
         }
         std::cout << "[RESP] " << resp << "\n";
-        sendResponse(sock, resp);
+        sendResponse(rmcSocket, resp);
     }
 }

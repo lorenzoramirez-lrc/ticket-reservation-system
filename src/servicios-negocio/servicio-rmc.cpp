@@ -2,6 +2,7 @@
 #include <zmq.hpp>
 #include <cstring>
 #include "../request-structs/structs.cpp"
+#include <iostream>
 
 void sendResponse(zmq::socket_t &socket, const std::string &response) {
     zmq::message_t reply(response.data(), response.size());
@@ -135,13 +136,29 @@ std::string checkEvents (zmq::socket_t &persistenceSocket, std::string month){
     return sendPersistence(persistenceSocket, events);
 }
 
-int main(){
+int main(int argc, char *argv[]){
+
+    if(argc != 3){
+        std::cout<<"Error: Numero de argumentos incorrecto\n";
+        std::cout<<"Formato: "<<argv[0]<<" <ip-gestor> <ip-persistencia>\n";
+        return 1;
+    }
+
+    std::string ipManager= "tcp://";
+    ipManager +=argv[1];
+    ipManager+=":7777";
+
+    std::string ipPersistence= "tcp://";
+    ipPersistence+=argv[2];
+    ipPersistence+=":8888";
+
+
     zmq::context_t contextZMQ(1);
     zmq::socket_t managerSocket(contextZMQ, zmq::socket_type::rep);
-    managerSocket.bind("tcp://10.43.100.20:7777");
+    managerSocket.bind(ipManager);
 
     zmq::socket_t persistenceSocket(contextZMQ, zmq::socket_type::req);
-    persistenceSocket.connect("tcp://10.43.100.34:8888");
+    persistenceSocket.connect(ipPersistence);
 
     while(true){
         zmq::message_t managerRequest;

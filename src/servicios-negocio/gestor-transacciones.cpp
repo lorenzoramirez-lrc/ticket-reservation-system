@@ -1,4 +1,5 @@
 #include <zmq.hpp>
+#include <iostream>
 #include "../request-structs/structs.cpp"
 
 
@@ -15,14 +16,28 @@ std::string sendSynchronousRequestRMC(Request &request , zmq::socket_t &rmcSocke
     return std::string(static_cast<char*>(replyRMC.data()));
 }
 
-int main(){
+int main(int argc, char *argv[]){
+
+    if(argc != 3){
+        std::cout<<"Error: Numero de argumentos incorrecto\n";
+        std::cout<<"Formato: "<<argv[0]<<" <ip-cliente> <ip-rmc>\n";
+        return 1;
+    }
+
+    std::string ipClient = "tcp://";
+    ipClient +=argv[1];
+    ipClient +=":5555";
+
+    std::string ipRMC = "tcp://";
+    ipRMC +=argv[2];
+    ipRMC +=":7777";
 
     zmq::context_t contextZMQ(1);
     zmq::socket_t clientSocket(contextZMQ, zmq::socket_type::rep);
-    clientSocket.bind("tcp://10.43.99.201:5555");
+    clientSocket.bind(ipClient);
 
     zmq::socket_t rmcSocket(contextZMQ, zmq::socket_type::req);
-    clientSocket.connect("tcp://10.43.100.20:7777");
+    rmcSocket.connect("tcp://10.43.100.20:7777");
 
     while(true){
         zmq::message_t clientRequest;
