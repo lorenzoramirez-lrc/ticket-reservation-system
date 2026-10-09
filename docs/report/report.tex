@@ -216,6 +216,16 @@ se cuantifican las transacciones procesadas de cada tipo durante el periodo de m
 calculando finalmente la tasa de transacciones por minutuo.
 
 \section{Generacion de carga clientes}
+\section{Generación de carga}
+La carga se genera con Locust usando un usuario personalizado en Python que se comunica con el Gestor de Transacciones mediante pyzmq, 
+cada cliente tiene su propio socket REQ y construye cada mensaje con el mismo formato del struct Request.
+
+Los clientes toman sus datos de un archivo load_data.json, generado con un script que crea identificadores de cliente, eventos, 
+meses y ocurrencias. La base de datos se carga a partir de ese mismo archivo, de modo que los identificadores coinciden en ambos lados. 
+
+En cada solicitud, el cliente elige de forma aleatoria (utilizando la función random.choice de la librería random) el mes en el caso de
+la consulta y el evento, la ocurrencia y el número de asientos en el caso de la reserva. Por lo anterior, se cuenta con dos tipos de 
+cliente: uno que solo consulta y otro que consulta y reserva, lo que permite simular los escenarios de la Tabla 1.
 
 
 \section{Introduction}
