@@ -1,15 +1,10 @@
--- ============================================
--- Events
--- ============================================
-
+-- EVENTS
 CREATE TABLE events (
     event_id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(255) NOT NULL
 );
 
--- ============================================
--- Event occurrences
--- ============================================
+-- OCCURRENCES
 
 CREATE TABLE event_occurrences (
     occurrence_id VARCHAR(50) PRIMARY KEY,
@@ -32,9 +27,7 @@ CREATE TABLE event_occurrences (
         )
 );
 
--- ============================================
--- Reservations
--- ============================================
+-- RESERVATIONS
 
 CREATE TABLE reservations (
     reservation_id VARCHAR(50) PRIMARY KEY,
@@ -42,6 +35,7 @@ CREATE TABLE reservations (
     client_id VARCHAR(100) NOT NULL,
     seat_count INTEGER NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
 
     CONSTRAINT fk_reservation_occurrence
         FOREIGN KEY (occurrence_id)
@@ -53,3 +47,34 @@ CREATE TABLE reservations (
     CONSTRAINT chk_reservation_status
         CHECK (status IN ('ACTIVE', 'CANCELLED'))
 );
+
+-- INITIAL EVENTS WITH OCCURRENCES 
+
+INSERT INTO events (event_id, name)
+VALUES
+    ('E1', 'AVATAR'),
+    ('E2', 'FLOW');
+
+
+INSERT INTO event_occurrences (
+    occurrence_id,
+    event_id,
+    date_time,
+    capacity,
+    occupied_seats
+)
+VALUES
+    (
+        'E1-1',
+        'E1',
+        '2026-10-20 19:00:00',
+        100,
+        0
+    ),
+    (
+        'E2-1',
+        'E2',
+        '2026-10-25 19:00:00',
+        100,
+        0
+    );
