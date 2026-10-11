@@ -1,8 +1,7 @@
 /*
-Archivo: agente.c
+Archivo: servicio-persistencia.cpp
 Objetivo: Recibir las solicitudes desde el servicio RMC y realizar las distintas operaciones en la persistencia de datos usando postgreSQL y su librería oficial.
 Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, modifyQuantity, modifyOcurrence, attend
-
 */
 
 #include <string>
