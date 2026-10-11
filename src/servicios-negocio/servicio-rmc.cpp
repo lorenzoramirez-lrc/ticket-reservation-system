@@ -1,7 +1,7 @@
 /*
 Archivo: servicio-rmc.cpp
 Objetivo: Recibir las solicitudes desde el Gestor de Transacciones y realizar la comunicación con el servicio de persistencia para retornar la respuesta al gestor.
-Funciones: sendResponse, sendPersistence, checkSeats, checkReservation, checkOccurrence, checkEvents, reserveSeats, modifyQuantity, modifyOcurrence, attend
+Funciones: sendResponse, sendPersistence, checkSeats, checkReservation, checkOccurrence, checkEvents, reserveSeats, modifyQuantity, modifyOcurrence
 */
 
 #include <string>
