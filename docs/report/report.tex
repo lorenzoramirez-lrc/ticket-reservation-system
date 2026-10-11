@@ -87,6 +87,7 @@ Por lo anterior el manejo de excepciones se limita únicamente a fallos por omis
 
 \subsection{Seguridad}
 
+El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. En primer lugar, para la integridad de los datos, se buscó realizar consultas parametrizadas con el fin de prevenir intentos de inyección SQL en el sistema, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente. Sumado a esto, se validó el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se valida nuevamente en las operaciones, la coherencia de los datos que envía el cliente con los datos registrados en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita en el código. Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no intervenga con el funcionamiento del servicio.
 
 \section{Diseño del sistema}
 

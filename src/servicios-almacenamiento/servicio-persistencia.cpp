@@ -1,3 +1,10 @@
+/*
+Archivo: agente.c
+Objetivo: Recibir las solicitudes desde el servicio RMC y realizar las distintas operaciones en la persistencia de datos usando postgreSQL y su librería oficial.
+Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, modifyQuantity, modifyOcurrence, attend
+
+*/
+
 #include <string>
 #include <cstring>
 #include <iostream>
@@ -11,16 +18,22 @@
 static std::string err(const std::string& m) { return "ERROR: " + m; }
 
 
-template <size_t N>
-static std::string str(const char (&a)[N]) { return std::string(a, strnlen(a, N)); }
-
+/* sendResponse
+Parametros de entrada: socket del zmq (zmq), respuesta (String)
+Parametros de salida: Ninguno
+Función: Envia la respuesta (reply) al socket correspondiente.
+*/
 void sendResponse(zmq::socket_t &socket, const std::string &response) {
     zmq::message_t reply(response.data(), response.size());
     socket.send(reply, zmq::send_flags::none);
 }
 
 
-
+/* checkSeats
+Parametros de entrada: conexión con la db, id del evento (String), id de la ocurrencia (String)
+Parametros de salida: String (El numero de asientos en la ocurrencia)
+Función: Retorna el numero de asientos disponible en una ocurrencia específica, además de asegurarse de la existencia de esta. En caso de no encontrarla retorna un error.
+*/
 std::string checkSeats(pqxx::connection& db, const std::string& eventID,
                        const std::string& occurrenceID) {
     pqxx::nontransaction tx(db);
@@ -31,7 +44,11 @@ std::string checkSeats(pqxx::connection& db, const std::string& eventID,
     return std::to_string(r[0]["free_seats"].as<int>());
 }
 
-
+/* checkReservation
+Parametros de entrada: conexión con la db, id de la reserva (String), id del cliente (String)
+Parametros de salida: String (El numero de asientos de la reserva)
+Función: Busca una reserva en la base de datos y en caso de que exista retorna el numero de asientos reservados. En caso contrario retorna un error.
+*/
 std::string checkReservation(pqxx::connection& db, const std::string& reservationID,
                              const std::string& clientID) {
     pqxx::nontransaction tx(db);
@@ -43,7 +60,11 @@ std::string checkReservation(pqxx::connection& db, const std::string& reservatio
     return std::to_string(r[0]["seat_count"].as<int>());
 }
 
-
+/* checkOccurrence
+Parametros de entrada: conexión con la db, id del evento (String), id de la ocurrencia (String)
+Parametros de salida: String (OK si existe, Error si no)
+Función: Revisa si una ocurrencia existe o no.
+*/
 std::string checkOccurrence(pqxx::connection& db, const std::string& eventID,
                             const std::string& occurrenceID) {
     pqxx::nontransaction tx(db);
@@ -55,7 +76,11 @@ std::string checkOccurrence(pqxx::connection& db, const std::string& eventID,
 }
 
 
-
+/* queryEvents
+Parametros de entrada: conexión con la db, mes a evaluar (valor numérico entero int)
+Parametros de salida: String (todas las ocurrencias en el mes en formato CSV)
+Función: Busca todas las ocurrencias en un mes y las retorna en formato CSV en orden cronológico.
+*/
 std::string queryEvents(pqxx::connection& db, int month) {
     pqxx::nontransaction tx(db);
     auto r = tx.exec_params(
@@ -75,63 +100,72 @@ std::string queryEvents(pqxx::connection& db, int month) {
     return out.str();
 }
 
-
-
+/* reserveSeats
+Parametros de entrada: conexión con la db, id del cliente (String), id del evento (String), id de la ocurrencia (String), cantidad de asientos a reservar (int)
+Parametros de salida: String (OK con el id de reserva si se pudo, error en caso contrario)
+Función: Revisa la disponibilidad de cupos de una ocurrencia en determinado evento y dependiendo de esta hace una reserva o no.
+*/
 std::string reserveSeats(pqxx::connection& db, const std::string& clientID,
                          const std::string& eventID, const std::string& occurrenceID,
                          int quantity) {
     if (quantity <= 0) return err("cantidad invalida");
     pqxx::work tx(db);
 
-    auto upd = tx.exec_params(
-        "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
-        "WHERE occurrence_id = $2 AND event_id = $3 AND occupied_seats + $1 <= capacity",
-        quantity, occurrenceID, eventID);
+    auto upd = tx.exec_params
+    (   "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
+        "WHERE occurrence_id = $2 AND event_id = $3 AND occupied_seats + $1 <= capacity", quantity, occurrenceID, eventID);
     if (upd.affected_rows() != 1)
-        return err("sin cupo o la ocurrencia no existe");      // sin commit: rollback
+        return err("sin cupo o la ocurrencia no existe");   
 
     auto ins = tx.exec_params(
         "INSERT INTO reservations(reservation_id, occurrence_id, client_id, seat_count) "
-        "VALUES (gen_random_uuid()::text, $1, $2, $3) RETURNING reservation_id",
-        occurrenceID, clientID, quantity);
-    auto id = ins[0][0].as<std::string>();
+        "VALUES (gen_random_uuid()::text, $1, $2, $3) RETURNING reservation_id", occurrenceID, clientID, quantity);
+    auto id = ins[0]["reservation_id"].as<std::string>();
 
     tx.commit();
     return "OK reservationID=" + id;
 }
 
 
-
+/* modifyQuantity
+Parametros de entrada: conexión con la db, id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String), nueva cantidad de asientos (int)
+Parametros de salida: String (OK si se pudo, Error si no)
+Función: Revisa si es posible cambiar la cantidad de asientos reservados en un pedido y realiza el cambio en caso de que sea posible. 
+*/
 std::string modifyQuantity(pqxx::connection& db, const std::string& reservationID,
                            const std::string& clientID, const std::string& eventID,
                            const std::string& occurrenceID, int newQuantity) {
-    if (newQuantity <= 0) return err("ERROR: cantidad invalida");
+    if (newQuantity<=0) return err("cantidad invalida");
     pqxx::work tx(db);
 
-    auto cur = tx.exec_params(
+    auto cur =tx.exec_params(
         "SELECT r.seat_count FROM reservations r "
         "JOIN event_occurrences o ON o.occurrence_id = r.occurrence_id "
         "WHERE r.reservation_id = $1 AND r.client_id = $2 AND r.status = 'ACTIVE' "
-        "  AND r.occurrence_id = $3 AND o.event_id = $4 FOR UPDATE OF r",
-        reservationID, clientID, occurrenceID, eventID);
+        "  AND r.occurrence_id = $3 AND o.event_id = $4 FOR UPDATE OF r", reservationID, clientID, occurrenceID, eventID);
     if (cur.empty()) return err("la reserva no existe, esta cancelada o no coincide");
 
-    int delta = newQuantity - cur[0]["seat_count"].as<int>();
-    if (delta == 0) return "OK";
+    int diff =newQuantity-cur[0]["seat_count"].as<int>();
+    if (diff==0) return err("No se modifico el numero de asientos");
 
-    auto upd = tx.exec_params(
+    auto upd =tx.exec_params(
         "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
         "WHERE occurrence_id = $2 AND occupied_seats + $1 <= capacity",
-        delta, occurrenceID);
+        diff, occurrenceID);
     if (upd.affected_rows() != 1) return err("sin cupo para la nueva cantidad");
 
-    tx.exec_params("UPDATE reservations SET seat_count = $2 WHERE reservation_id = $1",
-                   reservationID, newQuantity);
+    auto updR =tx.exec_params("UPDATE reservations SET seat_count = $2 WHERE reservation_id = $1", reservationID, newQuantity);
+    if (updR.affected_rows()!=1) return err("no se pudo cambiar el numero de asientos");
+
     tx.commit();
     return "OK";
 }
 
-
+/* modifyOccurrence
+Parametros de entrada: conexión con la db, id de la reserva (String), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String)
+Parametros de salida: String (OK si se pudo, Error si no)
+Función: Busca otras ocurrencias del mismo evento para poder cambiar los eventos de la ocurrencia actual a otra distinta.
+*/
 std::string modifyOccurrence(pqxx::connection& db, const std::string& reservationID,
                              const std::string& clientID, const std::string& eventID,
                              const std::string& occurrenceID) {
@@ -141,31 +175,35 @@ std::string modifyOccurrence(pqxx::connection& db, const std::string& reservatio
         "SELECT r.occurrence_id, r.seat_count FROM reservations r "
         "JOIN event_occurrences o ON o.occurrence_id = r.occurrence_id "
         "WHERE r.reservation_id = $1 AND r.client_id = $2 AND r.status = 'ACTIVE' "
-        "  AND o.event_id = $3 FOR UPDATE OF r",
-        reservationID, clientID, eventID);
+        "  AND o.event_id = $3 FOR UPDATE OF r", reservationID, clientID, eventID);
+
     if (cur.empty()) return err("la reserva no existe, esta cancelada o no es de ese evento");
 
     auto oldOcc = cur[0]["occurrence_id"].as<std::string>();
     int  seats  = cur[0]["seat_count"].as<int>();
-    if (oldOcc == occurrenceID) return err("ERROR: la reserva ya esta en esa ocurrencia");
+    if (oldOcc == occurrenceID) return err("la reserva ya esta en esa ocurrencia");
 
     auto take = tx.exec_params(
         "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
-        "WHERE occurrence_id = $2 AND event_id = $3 AND occupied_seats + $1 <= capacity",
-        seats, occurrenceID, eventID);
+        "WHERE occurrence_id = $2 AND event_id = $3 AND occupied_seats + $1 <= capacity", seats, occurrenceID, eventID);
+        
     if (take.affected_rows() != 1)
         return err("sin cupo o la nueva ocurrencia no es de ese evento");
 
     tx.exec_params("UPDATE event_occurrences SET occupied_seats = occupied_seats - $1 "
-                   "WHERE occurrence_id = $2", seats, oldOcc);
-    tx.exec_params("UPDATE reservations SET occurrence_id = $2 WHERE reservation_id = $1",
-                   reservationID, occurrenceID);
+                   "WHERE occurrence_id = $2", seats, oldOcc); //OldOcc new seats
+    tx.exec_params("UPDATE reservations SET occurrence_id = $2 WHERE reservation_id = $1", reservationID, occurrenceID); //new reservation Ocurrence
+
     tx.commit();
     return "OK";
 }
 
-
-std::string atender(pqxx::connection& db, const Request& q) {
+/* attend
+Parametros de entrada: conexión con la db, solicitud (Request)
+Parametros de salida: Tipo de dato que retorne de la función llamada. Error en caso inválido.
+Función: Recibe la solicitud y dependiendo del tipo, ejecuta la función correspondiente para atenderla.
+*/
+std::string attend(pqxx::connection& db, const Request& q) {
     switch (q.request) {
         case CHECK_SEATS:
             return checkSeats(db, str(q.eventID), str(q.occurrenceID));
@@ -175,7 +213,7 @@ std::string atender(pqxx::connection& db, const Request& q) {
             return checkOccurrence(db, str(q.eventID), str(q.occurrenceID));
         case RESERVE:
             return reserveSeats(db, str(q.clientID), str(q.eventID), str(q.occurrenceID), q.quantity);
-        case MODIFY_QUANTITY:   // el RMC manda la cantidad nueva en quantity
+        case MODIFY_QUANTITY:   
             return modifyQuantity(db, str(q.reservationID), str(q.clientID),
                                   str(q.eventID), str(q.occurrenceID), q.quantity);
         case MODIFY_OCCURRENCE:
@@ -190,7 +228,7 @@ std::string atender(pqxx::connection& db, const Request& q) {
         default:
             break;
     }
-    return err("ERROR: solicitud desconocida");
+    return err("solicitud desconocida");
 }
 
 int main(int argc, char *argv[]) {
@@ -208,7 +246,7 @@ int main(int argc, char *argv[]) {
 
     const char* env = std::getenv("SRB_DB");
     std::string conninfo = env ? env : "host=localhost dbname=event-reservation user=root password=root";
-    auto db = std::make_unique<pqxx::connection>(conninfo);
+    pqxx::connection db(conninfo);
 
     zmq::context_t ctx(1);
     zmq::socket_t rmcSocket(ctx, zmq::socket_type::rep);
@@ -222,20 +260,20 @@ int main(int argc, char *argv[]) {
         std::string resp;
         if (msg.size() != sizeof(Request)) {
             resp = err("solicitud invalida");
-        } else {
-            Request q{};
-            memcpy(&q, msg.data(), sizeof(Request));
+        } 
+
+        Request q{};
+        memcpy(&q, msg.data(), sizeof(Request));
         
-            try {
+        try {
                 try {
-                    resp = atender(*db, q);
+                    resp = attend(db, q);
                 } catch (const pqxx::broken_connection&) {
-                    db = std::make_unique<pqxx::connection>(conninfo);   // reconectar y reintentar
-                    resp = atender(*db, q);
+                    db = pqxx::connection(conninfo);   // reconectar y reintentar
+                    resp = attend(db, q);
                 }
             } catch (const std::exception& e) {
                 resp = err(e.what());
-            }
         }
         std::cout << "[RESP] " << resp << "\n";
         sendResponse(rmcSocket, resp);
