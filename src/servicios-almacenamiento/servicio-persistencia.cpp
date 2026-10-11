@@ -155,7 +155,7 @@ std::string modifyQuantity(pqxx::connection& db, const std::string& reservationI
     if (upd.affected_rows() != 1) return err("sin cupo para la nueva cantidad");
 
     auto updR =tx.exec_params("UPDATE reservations SET seat_count = $2 WHERE reservation_id = $1", reservationID, newQuantity);
-    if (updR.affected_rows()!=1) return err("no se pudo cambiar el numero de asientos")
+    if (updR.affected_rows()!=1) return err("no se pudo cambiar el numero de asientos");
 
     tx.commit();
     return "OK";
