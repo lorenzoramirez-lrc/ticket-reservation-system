@@ -1,8 +1,17 @@
+/*
+Archivo: gestor-transacciones.cpp
+Objetivo: Realizar la comunicación con el cliente y con el servicioRMC mediante un protocolo request reply para enviar 
+Funciones: sendResponse, sendPersistence, checkSeats, checkReservation, checkOccurrence, checkEvents, reserveSeats, modifyQuantity, modifyOcurrence
+*/
 #include <zmq.hpp>
 #include <iostream>
 #include "../request-structs/structs.cpp"
 
-
+/* sendSynchronousRequestRMC
+Parametros de entrada: solicitud (Request), socket zmq (socket_t)
+Parametros de salida: String
+Función: Envía la solicitud síncrona al socket RMC para retornar su respuesta.
+*/
 std::string sendSynchronousRequestRMC(Request &request , zmq::socket_t &rmcSocket){
 
     zmq::message_t requestRMC(sizeof(request));
@@ -16,6 +25,12 @@ std::string sendSynchronousRequestRMC(Request &request , zmq::socket_t &rmcSocke
     return std::string(static_cast<char*>(replyRMC.data()));
 }
 
+/* main
+Parametros de entrada: numero de argumentos a ingresar (int), cadena de caracteres con los argumentos(char*)
+Parametros de salida: 1 si se encontró algún error, 0 en caso contrario.
+Función: Es la función principal del programa, inicializa el contexto de ZMQ para poder gestionar las redes. Además inicializa el socket del cliente, el socket del RMC y declara las direcciones que se van a utilizar para las comunicaciones.
+         Se van a registrar las solicitudes que envíe el cliente en la consola y las solicitudes que sean enviadas al RMC. Además de que también se verificará que las solicitudes recibidas sigan la estructura establecida.
+*/
 int main(int argc, char *argv[]){
 
     if(argc != 3){
