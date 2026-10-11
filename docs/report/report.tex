@@ -136,6 +136,23 @@ clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y
 
 \subsection{Clases}
 
+Para el diseño del sistema se decidió representar como clases únicamente a los clientes. Como se puede observar 
+existe una clase abstracta BaseClient de la cual heredan las clases QueryUser (consultas de eventos) y 
+MixedUser (consultas y reservas) que sirven para simular clientes para las pruebas de rendimiento.
+
+Los parámetros de cada solicitud se envían mediante la estructura Request, que utiliza la enumeración 
+RequestType para indicar el tipo de solicitud.
+
+El resto de elementos del diagrama no representan clases, estructuras o enumeraciones, sino que representan 
+los servicios del sistema (Gestor, RMC, Cancelación y Persistencia). Agrupando en cada caja las funciones que
+implementa el servicio correspondiente.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{clases.png}}
+    \caption{Diagrama de clases.}
+    \label{DiagramaClases}
+\end{figure}
+
 \subsection{Secuencia}
 
 \section{Escalabilidad y tolerancia a fallos}
