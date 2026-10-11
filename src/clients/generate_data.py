@@ -1,9 +1,9 @@
 import json
 
-NUM_CLIENTS = 8
-NUM_EVENTS = 50
-EVENTS_WITH_TWO_OCCURRENCES = 20   
-MONTHS = ["octubre", "noviembre", "diciembre"]
+NUM_CLIENTS = 5
+NUM_EVENTS = 2
+EVENTS_WITH_TWO_OCCURRENCES = 0
+MONTHS = ["octubre"]
 
 events = []
 eventNumber = 1

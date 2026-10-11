@@ -1,0 +1,27 @@
+{
+  "e1": {
+    "mode": "sequential",
+    "reservations": [
+      {
+        "clientID": "C001",
+        "eventID": "E1",
+        "occurrenceID": "E1-1",
+        "quantity": 5
+      },
+      {
+        "clientID": "C002",
+        "eventID": "E1",
+        "occurrenceID": "E1-1",
+        "quantity": 3
+      }
+    ]
+  },
+  "e2": {
+    "mode": "concurrent",
+    "reservation": {
+      "eventID": "E2",
+      "occurrenceID": "E2-1",
+      "quantity": 25
+    }
+  }
+}

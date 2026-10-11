@@ -1,23 +1,20 @@
-import json
 import os
 import random
 import struct
 from itertools import cycle
+
 import zmq.green as zmq     
 from locust import User, task, constant_throughput
 
-
 FORMAT = "<i32s32s32s32si16s"
 RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_RESERVATION, CHECK_OCCURRENCES = range(8)
+
 MANAGER_ADDR = os.environ.get("MANAGER_ADDR", "tcp://10.43.99.201:5555")
+
 REQS_PER_MIN = float(os.environ.get("REQS_PER_MIN", 30))     
-QUERY_USERS = int(os.environ.get("QUERY_USERS", 2))         
-MIXED_USERS = int(os.environ.get("MIXED_USERS", 1))         
 MIXED_QUERY_PCT = float(os.environ.get("MIXED_QUERY_PCT", 50))  
 
-with open(os.path.join(os.path.dirname(__file__), "load_data.json")) as f:
-    DATA = json.load(f)
-
+CLIENTS = [f"C{i:03d}" for i in range(1, 9)]
 CLIENT_POOL = cycle(DATA["clients"])
 
 def buildRequest(type, clientID="", eventID="", occurrenceID="", reservationID="", quantity=0, month=""):
@@ -40,20 +37,25 @@ class BaseClient(User):
     def _connect(self):
         self.sock = self.ctx.socket(zmq.REQ)
         self.sock.setsockopt(zmq.LINGER, 0)
-        self.sock.setsockopt(zmq.RCVTIMEO, 5000)
         self.sock.connect(MANAGER_ADDR)
 
     def on_stop(self):
+        print()
         self.sock.close()
         self.ctx.term()
 
     def _send(self, data):
-        try:
-            self.sock.send(data)
-            self.sock.recv()
-        except zmq.Again:
-            self.sock.close()
-            self._connect()
+
+        print(f"[CLIENTE] Enviando {len(data)} bytes a {MANAGER_ADDR}", flush=True)
+
+        self.sock.send(data)
+        print("[CLIENTE] Solicitud enviada", flush=True)
+
+        response = self.sock.recv()
+
+        print(f"[CLIENTE] Respuesta recibida", flush=True)
+        return response
+
 
     def _query(self):
         month = random.choice(DATA["months"])
@@ -65,17 +67,16 @@ class BaseClient(User):
         self._send(buildRequest(RESERVE, self.clientID, event["eventID"],
                                            occurrenceID, quantity=random.randint(1, 4)))
 
-
 class QueryUser(BaseClient):
-    fixed_count = QUERY_USERS
+    fixed_count = int(os.environ.get("QUERY_USERS", 2))
 
     @task
     def query(self):
         self._query()
 
-
 class MixedUser(BaseClient):
-    fixed_count = MIXED_USERS
+    fixed_count = int(os.environ.get("MIXED_USERS", 1))
+    query_pct = float(os.environ.get("MIXED_QUERY_PCT", 50))
 
     @task
     def mixed(self):
