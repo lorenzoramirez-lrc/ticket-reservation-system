@@ -260,6 +260,8 @@ int main(int argc, char *argv[]) {
         std::string resp;
         if (msg.size() != sizeof(Request)) {
             resp = err("solicitud invalida");
+            sendResponse(rmcSocket, resp);
+            continue;
         } 
 
         Request q{};
@@ -273,7 +275,7 @@ int main(int argc, char *argv[]) {
                     resp = attend(db, q);
                 }
             } catch (const std::exception& e) {
-                resp = err(e.what());
+                resp = err("Error de servidor.");
         }
         std::cout << "[RESP] " << resp << "\n";
         sendResponse(rmcSocket, resp);
