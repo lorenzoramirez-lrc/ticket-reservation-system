@@ -165,24 +165,6 @@ std::string modifyOccurrence(pqxx::connection& db, const std::string& reservatio
 }
 
 
-std::string cancelReservation(pqxx::connection& db, const std::string& reservationID,
-                              const std::string& clientID) {
-    pqxx::work tx(db);
-
-    auto r = tx.exec_params(
-        "UPDATE reservations SET status = 'CANCELLED' "
-        "WHERE reservation_id = $1 AND client_id = $2 AND status = 'ACTIVE' "
-        "RETURNING occurrence_id, seat_count", reservationID, clientID);
-    if (r.empty()) return err("ERROR: la reserva no existe, ya esta cancelada o no es del cliente");
-
-    tx.exec_params("UPDATE event_occurrences SET occupied_seats = occupied_seats - $1 "
-                   "WHERE occurrence_id = $2",
-                   r[0]["seat_count"].as<int>(), r[0]["occurrence_id"].as<std::string>());
-    tx.commit();
-    return "OK";
-}
-
-
 std::string atender(pqxx::connection& db, const Request& q) {
     switch (q.request) {
         case CHECK_SEATS:
@@ -205,8 +187,6 @@ std::string atender(pqxx::connection& db, const Request& q) {
             catch (...) { return err("mes invalido"); }
             return queryEvents(db, month);
         }
-        case CANCEL:
-            return cancelReservation(db, str(q.reservationID), str(q.clientID));
         default:
             break;
     }
