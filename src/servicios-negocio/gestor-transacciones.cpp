@@ -28,8 +28,8 @@ std::string sendSynchronousRequestRMC(Request &request , zmq::socket_t &rmcSocke
 /* main
 Parametros de entrada: numero de argumentos a ingresar (int), cadena de caracteres con los argumentos(char*)
 Parametros de salida: 1 si se encontró algún error, 0 en caso contrario.
-Función: Es la función principal del programa, inicializa el contexto de ZMQ para poder gestionar las redes. Además inicializa el socket del cliente, el socket del RMC y declara las direcciones que se van a utilizar para las comunicaciones.
-         Se van a registrar las solicitudes que envíe el cliente en la consola y las solicitudes que sean enviadas al RMC. Además de que también se verificará que las solicitudes recibidas sigan la estructura establecida.
+Función: Es la función principal del programa, inicializa el contexto de ZMQ para poder gestionar las redes. Además inicializa el socket del cliente y el socket del RMC para la comunicación Request-Reply. Asimismo, declara las direcciones que se van a utilizar para las comunicaciones.
+         Se van a registrar las solicitudes que envíe el cliente en la consola y las solicitudes que sean enviadas al RMC. Además de que a su vez se verificará que las solicitudes recibidas sigan la estructura establecida.
 */
 int main(int argc, char *argv[]){
 
