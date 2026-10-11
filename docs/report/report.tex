@@ -31,13 +31,6 @@
 
 \maketitle
 
-\begin{abstract}
-This document is a model and instructions for \LaTeX.
-This and the IEEEtran.cls file define the components of your paper [title, text, heads, etc.]. *CRITICAL: Do Not Use Symbols, Special Characters, Footnotes, 
-or Math in Paper Title or Abstract.
-\end{abstract}
-
-
 \section{Introducción}
 
 
@@ -80,18 +73,17 @@ escalabilidad y tolerancia a fallos, puesto que las solicitudes serán distribui
 
 El modelo de fallos contempla tanto fallos en la red como en cada uno de los procesos del sistema. Al ser un sistema
 con un modelo de interacción asincrónico, no existen límites superiores conocidos para el tiempo de ejecución de procesos
-o envió y recepción de mensaje. Por lo anterior no se consideran fallos de prestaciones, ya que no existe límites
-para determinar si una respuesta está fuera de los tiempos esperados. De igual forma, no se asume fallos tipo
-Fail/Stop, puesto que la inexistencia de límites temporales hace que no se pueda
-determinar con certeza si un proceso ha fallado o se ha ejecutado con retraso.
+o envió y recepción de mensaje. Por lo anterior no se consideran fallos de prestaciones ni de tipo Fail/Stop, ya que no existe límites
+para determinar si un envio de mensaje o ejecucion ha fallado o se ha ejecutado con retraso.
 
 Por lo anterior el sistema considera principalmente fallos de ruptura y omisión.
-Los fallos de ruptura corresponden a situaciones en las que un proceso como el Gestor de Transacciones pueden fallar.
+Los fallos de ruptura corresponden a situaciones en las que un proceso como el Gestor de Transacciones pueden fallar sin ser detectado por otros.
 Por otro lado, los fallos de omisión contemplan situaciones en las que un mensaje no es enviado, se pierde durante la
 comunicación o no es recibido por su destinatario.
 
-Finalmente, los componentes del sistema se consideran libres de fallos bizantinos es decir que al fallar dejan de operar
-en vez de producir y enviar información arbitraria.
+Finalmente, se reconoce la posibilidad de fallos bizantinos en el sistema distribuido más el diseño no contempla la tolerancia a estos.
+Se trabaja bajo el supuesto de que un nodo al fallar no seguirá operando en vez de mostrar comportamiento aleatorio en su proceso o envió de mensajes.
+Por lo anterior el manejo de excepciones se limita únicamente a fallos por omisión y ruptura.
 
 \subsection{Seguridad}
 
@@ -149,7 +141,6 @@ clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y
 \section{Escalabilidad y tolerancia a fallos}
 
 La escalabilidad y tolerancia a fallos sera llevada a cabo 
-
 
 
 \section{Protocolo de pruebas}
@@ -221,7 +212,7 @@ calculando finalmente la tasa de transacciones por minutuo.
 La carga se genera con Locust usando un usuario personalizado en Python que se comunica con el Gestor de Transacciones mediante pyzmq, 
 cada cliente tiene su propio socket REQ y construye cada mensaje con el mismo formato del struct Request.
 
-Los clientes toman sus datos de un archivo load_data.json, generado con un script que crea identificadores de cliente, eventos, 
+Los clientes toman sus datos de un archivo load\_data.json, generado con un script que crea identificadores de cliente, eventos, 
 meses y ocurrencias. La base de datos se carga a partir de ese mismo archivo, de modo que los identificadores coinciden en ambos lados. 
 
 En cada solicitud, el cliente elige de forma aleatoria (utilizando la función random.choice de la librería random) el mes en el caso de
