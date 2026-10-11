@@ -24,9 +24,9 @@ int main(int argc, char *argv[]){
         return 1;
     }
 
-    std::string ipClient = "tcp://";
-    ipClient +=argv[1];
-    ipClient +=":5555";
+    std::string ipManager = "tcp://";
+    ipManager +=argv[1];
+    ipManager +=":5555";
 
     std::string ipRMC = "tcp://";
     ipRMC +=argv[2];
@@ -34,7 +34,7 @@ int main(int argc, char *argv[]){
 
     zmq::context_t contextZMQ(1);
     zmq::socket_t clientSocket(contextZMQ, zmq::socket_type::rep);
-    clientSocket.bind(ipClient);
+    clientSocket.bind(ipManager);
 
     zmq::socket_t rmcSocket(contextZMQ, zmq::socket_type::req);
     rmcSocket.connect(ipRMC);
@@ -54,6 +54,9 @@ int main(int argc, char *argv[]){
         Request structuredRequest; 
         memcpy(&structuredRequest, clientRequest.data(), sizeof(Request));
 
+        std::cout<<"[GESTOR] Solicitud Recibida de Cliente "<<sizeof(structuredRequest)<<" bytes\n";
+        printRequest(structuredRequest);
+
         std::string transactionResponse{};
 
         if(structuredRequest.request != RequestType::CANCEL){
@@ -61,6 +64,7 @@ int main(int argc, char *argv[]){
         }else{
             //cancelService
         }
+        std::cout<<"[GESTOR] Respuesta recibida de RMC: "<<transactionResponse<<"\n";
 
         clientSocket.send(zmq::message_t(transactionResponse), zmq::send_flags::none);
     }

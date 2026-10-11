@@ -1,4 +1,4 @@
-#include <string>
+#include <iostream>
 #include <cstring>
 
 enum RequestType { RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_RESERVATION, CHECK_OCCURRENCES};
@@ -19,4 +19,14 @@ void copy(char (&destiny)[N], const std::string &origin) {
     std::strncpy(destiny, origin.c_str(), N - 1);
     destiny[N - 1] = '\0';
 }
+
+void printRequest(const Request& r) {
+    std::cout << "Request: " << r.request
+              << " | Client: " << r.clientID << '\n';
+}
+
+
+
+
+
 
