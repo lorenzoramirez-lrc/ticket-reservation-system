@@ -140,13 +140,13 @@ int main(int argc, char *argv[]){
 
     if(argc != 3){
         std::cout<<"Error: Numero de argumentos incorrecto\n";
-        std::cout<<"Formato: "<<argv[0]<<" <ip-gestor> <ip-persistencia>\n";
+        std::cout<<"Formato: "<<argv[0]<<" <ip-rmc> <ip-persistencia>\n";
         return 1;
     }
 
-    std::string ipManager= "tcp://";
-    ipManager +=argv[1];
-    ipManager+=":7777";
+    std::string ipRMC= "tcp://";
+    ipRMC +=argv[1];
+    ipRMC +=":7777";
 
     std::string ipPersistence= "tcp://";
     ipPersistence+=argv[2];
@@ -155,7 +155,7 @@ int main(int argc, char *argv[]){
 
     zmq::context_t contextZMQ(1);
     zmq::socket_t managerSocket(contextZMQ, zmq::socket_type::rep);
-    managerSocket.bind(ipManager);
+    managerSocket.bind(ipRMC);
 
     zmq::socket_t persistenceSocket(contextZMQ, zmq::socket_type::req);
     persistenceSocket.connect(ipPersistence);

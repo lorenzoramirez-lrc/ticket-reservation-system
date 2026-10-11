@@ -20,7 +20,7 @@ int main(int argc, char *argv[]){
 
     if(argc != 3){
         std::cout<<"Error: Numero de argumentos incorrecto\n";
-        std::cout<<"Formato: "<<argv[0]<<" <ip-cliente> <ip-rmc>\n";
+        std::cout<<"Formato: "<<argv[0]<<" <ip-gestor> <ip-rmc>\n";
         return 1;
     }
 
@@ -37,7 +37,7 @@ int main(int argc, char *argv[]){
     clientSocket.bind(ipClient);
 
     zmq::socket_t rmcSocket(contextZMQ, zmq::socket_type::req);
-    rmcSocket.connect("tcp://10.43.100.20:7777");
+    rmcSocket.connect(ipRMC);
 
     while(true){
         zmq::message_t clientRequest;

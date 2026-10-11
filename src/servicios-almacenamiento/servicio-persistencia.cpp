@@ -218,21 +218,21 @@ int main(int argc, char *argv[]) {
 
     if(argc != 2){
         std::cout<<"Error: Numero de argumentos incorrecto\n";
-        std::cout<<"Formato: "<<argv[0]<<" <ip-rmc>\n";
+        std::cout<<"Formato: "<<argv[0]<<" <ip-persistencia>\n";
         return 1;
     }
 
-    std::string ipRMC= "tcp://";
-    ipRMC +=argv[1];
-    ipRMC +=":8888";
+    std::string ipPersistence= "tcp://";
+    ipPersistence+=argv[1];
+    ipPersistence+=":8888";
 
     const char* env = std::getenv("SRB_DB");
-    std::string conninfo = env ? env : "host=localhost dbname=srb user=postgres password=srb";
+    std::string conninfo = env ? env : "host=localhost dbname=event-reservation user=root password=root";
     auto db = std::make_unique<pqxx::connection>(conninfo);
 
     zmq::context_t ctx(1);
     zmq::socket_t rmcSocket(ctx, zmq::socket_type::rep);
-    rmcSocket.bind(ipRMC);
+    rmcSocket.bind(ipPersistence);
 
     while (true) {
         zmq::message_t msg;
