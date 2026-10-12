@@ -87,7 +87,16 @@ Por lo anterior el manejo de excepciones se limita únicamente a fallos por omis
 
 \subsection{Seguridad}
 
-El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. En primer lugar, para la integridad de los datos, se buscó realizar consultas parametrizadas con el fin de prevenir intentos de inyección SQL en el sistema, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente. Sumado a esto, se validó el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se valida nuevamente en las operaciones, la coherencia de los datos que envía el cliente con los datos registrados en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita en el código. Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no intervenga con el funcionamiento del servicio.
+El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. 
+En primer lugar, para la integridad de los datos, se buscó realizar consultas parametrizadas con el fin de prevenir intentos de inyección SQL en el sistema, 
+además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. 
+Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, 
+la operación se deshace completamente. Sumado a esto, se validó el tamaño de las solicitudes para asegurar que sigan la estructura esperada, 
+y se valida nuevamente en las operaciones, la coherencia de los datos que envía el cliente con los datos registrados en el sistema. 
+Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que no mostrara al cliente información acerca de los datos. 
+Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita en el código. 
+Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un 
+posible fallo no intervenga con el funcionamiento del servicio.
 
 \section{Diseño del sistema}
 
@@ -101,12 +110,12 @@ El diagrama de despliegue (Fig. \ref{DiagramaDespliegue}) expone la distribució
 una siendo una capa de la arquitectura del sistema. De este diagrama se debe destacar los protocolos de comunicación
 seleccionados teniendo en cuenta el modelo de comunicacion sincrónico y asincrónico del sistema. Para ello se utiliza el protocolo
 sincrónico REQ/REP de ZeroMQ para todo el flujo de solicitudes sincrónicas. En el caso de cancelación el cual debe
-ser asincrónico para el cliente se manejan distintos protocolos teniendo en cuenta los requerimientos de comunicación
-entre servicios. Para ello se usa
-el patrón Router/Dealer para las notificaciones al cliente una vez hecha la cancelación y el llamado al gestor de transacciones al
-cliente. Ademas se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional
-y división de tareas considerando las modificaciones a futuro para la escalabilidad del sistema.
-
+ser asincrónico para el cliente se manejan distintos protocolos teniendo en cuenta este requerimiento. El patron Router/Dealer es usado tanto para las
+llamadas al gestor de transacciones como el servicio de notificaciones de cancelacion al cliente. Se utiliza este patron asincronico debido 
+a la necesidad de que el servicio de cancelacion conozca el cliente que hizo la cancelacion y de esa manera pueda enviar de forma oportuna la notificacion.
+Ademas, se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional el cual va acorde con el flujo esperado 
+de la cancelacion. Tambien su control de flujo permite seguir enviando solicitudes de cancelacion a un buffer en caso que el servicio de cancelacion
+este procesando solicitudes lentamente.
 
 \begin{figure}[htbp]
     \centerline{\includegraphics[width=\columnwidth]{despliegue.png}}
@@ -138,10 +147,41 @@ clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y
 
 \subsection{Secuencia}
 
-\section{Escalabilidad y tolerancia a fallos}
+\section{Arquitectura Escalable}
+Para alcanzar una arquitectura del sistema más escalable y tolerante a fallos se añadirán diferentes componentes y
+herramientas para mejorar la arquitectura base propuesta. Considerando el diseño y requerimientos del sistema se determinó que
+los servicios más vulnerables a picos de solicitudes son servicio RMC y la única base de datos, también se considera importante
+mantener una alta disponibilidad del sistema dado el fallo del gestor de transacciones.
 
-La escalabilidad y tolerancia a fallos sera llevada a cabo 
+El servicio RMC maneja solicitudes de reserva, modificación y consulta, por lo que un aumento de solicitudes concurrentes puede
+incrementar la utilización de recursos y tiempo de respuesta debido a las operaciones que debe hacer al servicio de
+persistencia y acceso a la base de datos.
+Para mejorar la capacidad de procesamiento de este servicio se considera el despliegue de réplicas del servicio RMC junto
+a un balanceador de carga que distribuya las solicitudes mediante una política de Round Robin.
+Se decide mantener la comunicación síncrona en este componente puesto que al manejar solicitudes
+de reserva o modificación el cliente necesita saber el resultado de la operación antes de continuar el proceso.
 
+Considerando la creación de réplicas del servicio RMC el cuello de botella del sistema se vería trasladado a la base de datos.
+Para distribuir la carga de solicitudes de disponibilidad de eventos, las cuales representaran una parte significativa de las solicitudes,
+se propone incorporar replicas destinadas a consultas de lectura manteniendo una única instancia primaria de escritura.
+Esta decisión de diseño implica que se debe considerar la falla de la instancia de escritura mediante la promoción de una
+réplica y la redirección de las conexiones hacia la nueva instancia primaria contemplando posibles retrasos en la propagación de información a
+las réplicas de lectura.
+
+El gestor de transacciones al ser la frontera entre la capa de clientes y la capa de lógica de negocios tiene una importancia crítica
+y es un single point of failure en el sistema. Para no limitar la disponibilidad del sistema y mantener simple la coordinación entre clientes
+y el gestor de transacciones se implementará un mecanismo failover con una instancia del
+gestor preparada para asumir las funciones de la instancia primaria si esta falla. Este componente contemplará la redirección de solicitudes y
+recuperación de operaciones pendientes.
+
+Por otra parte, el servicio de cancelación no tendrá ningún cambio en comparación con la arquitectura inicial.
+Esto decisión de diseño se toma teniendo en cuenta que el servicio de cancelación ya utiliza un modelo de comunicación asíncrono.
+Como se mencionó en el diagrama de despliegue el servicio de cancelación recibe las solicitudes a través del patrón Push/Pull el
+cual permite que el envío de mensajes esté desacoplado del procesamiento de este. Permitiendo que el servicio de cancelación procese las
+solicitudes a su propio ritmo. También es importante mencionar que dado
+los requerimientos que debe cumplir este nodo no se espera que tenga picos de tráfico a diferencia del Servicio RMC, puesto que la mayoría
+del tiempo los actores no estarán realizando solicitudes de cancelación. Por lo anterior se considera que añadir componentes de escalabilidad
+y tolerancia incrementaría la complejidad del sistema sin asegurar mejoras en el desempeño del servicio.
 
 \section{Protocolo de pruebas}
 
@@ -149,9 +189,6 @@ El protocolo de pruebas del sistema contempla diferentes niveles de validacion p
 funcionamiento y posterior medicion de rendimiento ante diferentes cargas y tolerancia a fallos.
 
 Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios
-
-
-
 
 En relacion a las pruebas del sistema distribuido se realizaran pruebas concurrentes con diferentes numeros de clientes 
 que realicen operaciones simultaneamente. De esta manera se evaluara el comportamiento y rendimiento
