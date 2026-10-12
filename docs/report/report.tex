@@ -87,7 +87,7 @@ Por lo anterior el manejo de excepciones se limita únicamente a fallos por omis
 
 \subsection{Seguridad}
 
-El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. En primer lugar, para la integridad de los datos, se buscó realizar consultas parametrizadas con el fin de prevenir intentos de inyección SQL en el sistema, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente. Sumado a esto, se validó el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se valida nuevamente en las operaciones, la coherencia de los datos que envía el cliente con los datos registrados en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita en el código. Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no intervenga con el funcionamiento del servicio.
+El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. En primer lugar, para la integridad de los datos, se buscará realizar consultas parametrizadas, práctica recurrente al momento de realizar operaciones con una base de datos, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente. Sumado a esto, se validará el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se valida nuevamente en las operaciones la coherencia de los datos que envía el cliente con la información registrada en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita en el código. Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no intervenga con el funcionamiento del servicio.
 
 \section{Diseño del sistema}
 
@@ -138,6 +138,42 @@ clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y
 
 \subsection{Secuencia}
 
+El diagrama de secuencia muestra el comportamiento del sistema para llevar a cabo una operación, exponiendo la interacción
+entre los servicios del sistema y mostrando el orden de las interacciones para realizar un caso de uso.
+En este se evidencian los 3 componentes del sistema que se encargan de atender los casos de uso del usuario, de modo 
+en el que el Gestor de Transacciones será el único que se comunicará con el cliente, recibiendo las solicitudes y
+entregando los resultados que obtenga del servicio RMC. Por otro lado, el servicio RMC será el que defina la comunicación
+con el servicio de persistencia para atender la solicitud, además de que el resultado que obtenga del servicio será enviado
+al Gestor de Transacciones. El servicio de Persistencia será el encargado de realizar las operaciones correspondientes en
+la base de datos además de verificar que los datos que reciba del servicio RMC sean coherentes con los almacenados en el sistema
+y puedan ser resueltos.
+
+Los distintos casos de uso posibles de realizar por el sistema se aprecian en los diagramas de secuencia.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{makereservation.png}}
+    \caption{Escenario hacer reserva.}
+    \label{SecHacerReserva}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{modifyquantity.png}}
+    \caption{Escenario modificar cantidad de asientos.}
+    \label{SecModificarCantidad}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{modifyOcurrence.png}}
+    \caption{Escenario modificar ocurrencia.}
+    \label{SecModificarOcurrencia}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{cancelreservation.png}}
+    \caption{Escenario cancelar reserva.}
+    \label{SecCancelarReserva}
+\end{figure}
+
 \section{Escalabilidad y tolerancia a fallos}
 
 La escalabilidad y tolerancia a fallos sera llevada a cabo 
@@ -148,17 +184,25 @@ La escalabilidad y tolerancia a fallos sera llevada a cabo
 El protocolo de pruebas del sistema contempla diferentes niveles de validacion para asegurar su correcto
 funcionamiento y posterior medicion de rendimiento ante diferentes cargas y tolerancia a fallos.
 
-Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios
+Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios sin usar red ni base de datos. 
+Se verificarán las decisiones que tome el RMC frente a distintas solicitudes simulando respuestas recibidas por parte de 
+los otros servicios, además del empaquetado de las mismas y su uso correspondiente.
 
+Para las pruebas de integración del sistema, se llevarán a cabo distintos casos de prueba, y se tendrá en cuenta la coherencia entre
+la comunicación del sistema para responder frente al escenario, verificando que los servicios se atiendan entre sí (El servicio de persistencia
+con la base de datos y el servicio RMC y el servicio RMC con persistencia y el Gestor de transacciones).
 
-
+En el apartado end to end se plantearán distintos flujos de negocio enfocados en las posibles interacciones que pueda tener el cliente 
+con el sistema interactuando desde el Gestor de Transacciones, esperando obtener un resultado concreto para verificar que el flujo de 
+lógica del sistema funcione correctamente. Se contemplan posibles escenarios de múltiples solicitudes al mismo tiempo, distintas
+solicitudes desde el mismo cliente o incluso solicitudes inválidas.
 
 En relacion a las pruebas del sistema distribuido se realizaran pruebas concurrentes con diferentes numeros de clientes 
 que realicen operaciones simultaneamente. De esta manera se evaluara el comportamiento y rendimiento
 del sistema ante diferentes cargas de operaciones. Como se muestra en la Tabla \ref{tab:pruebas_rendimiento} 
 se obtendran metricas que evaluen y comparen el diseño de la arquitectura base y la arquitectura escalable 
 propuesta en la seccion anterior. Cada prueba de carga contempla una generacion de operaciones por parte de los clientes 
-de 3 minutos.
+de 3 minutos.	
 
 Asimismo se considerara una prueba de fallo y resilencia mediante la interrupcion voluntaria del Gestor de Transacciones.
 Ante esta falla se espera que el sistema instancie un nuevo proceso que sustituya al servicio.
