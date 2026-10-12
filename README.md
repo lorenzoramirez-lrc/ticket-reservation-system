@@ -1,4 +1,4 @@
-# Sistema Distribuidoo de Reserva de Eventos 
+# Sistema Distribuido para Reserva de Eventos 
 
 Sistema distribuido para manejo de reservas, cancelaciones, modificaciones y consultas de disponibilidad de eventos.
 
