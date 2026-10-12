@@ -31,7 +31,15 @@
 \maketitle
 
 \section{Introducción}
+El presente documento describe el diseño e implementación de un sistema distribuido para la gestión 
+de reservas de eventos, orientado al procesamiento concurrente de solicitudes de consulta, reserva, 
+modificación y cancelación. La arquitectura se organiza en capas y utiliza mecanismos de comunicación 
+síncrona y asíncrona mediante ZeroMQ, junto con PostgreSQL para la persistencia de la información.
 
+Asimismo, se plantea una arquitectura escalable y tolerante a fallos, cuyas mejoras se evaluarán mediante 
+pruebas de carga y escenarios de interrupción de servicios. El análisis considera métricas como los tiempos 
+de respuesta, las transacciones por minuto y la capacidad de recuperación del sistema, con el propósito de 
+estudiar su comportamiento bajo diferentes condiciones de carga y fallo.
 
 \section{Modelos del sistema}
 
