@@ -1,8 +1,7 @@
 /*
-Archivo: agente.c
+Archivo: servicio-persistencia.cpp
 Objetivo: Recibir las solicitudes desde el servicio RMC y realizar las distintas operaciones en la persistencia de datos usando postgreSQL y su librería oficial.
 Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, modifyQuantity, modifyOcurrence, attend
-
 */
 
 #include <string>
@@ -206,22 +205,22 @@ Función: Recibe la solicitud y dependiendo del tipo, ejecuta la función corres
 std::string attend(pqxx::connection& db, const Request& q) {
     switch (q.request) {
         case CHECK_SEATS:
-            return checkSeats(db, str(q.eventID), str(q.occurrenceID));
+            return checkSeats(db, (q.eventID), (q.occurrenceID));
         case CHECK_RESERVATION:
-            return checkReservation(db, str(q.reservationID), str(q.clientID));
+            return checkReservation(db, (q.reservationID), (q.clientID));
         case CHECK_OCCURRENCES:
-            return checkOccurrence(db, str(q.eventID), str(q.occurrenceID));
+            return checkOccurrence(db, (q.eventID), (q.occurrenceID));
         case RESERVE:
-            return reserveSeats(db, str(q.clientID), str(q.eventID), str(q.occurrenceID), q.quantity);
+            return reserveSeats(db, (q.clientID), (q.eventID), (q.occurrenceID), q.quantity);
         case MODIFY_QUANTITY:   
-            return modifyQuantity(db, str(q.reservationID), str(q.clientID),
-                                  str(q.eventID), str(q.occurrenceID), q.quantity);
+            return modifyQuantity(db, (q.reservationID), (q.clientID),
+                                  (q.eventID), (q.occurrenceID), q.quantity);
         case MODIFY_OCCURRENCE:
-            return modifyOccurrence(db, str(q.reservationID), str(q.clientID),
-                                    str(q.eventID), str(q.occurrenceID));
+            return modifyOccurrence(db, (q.reservationID), (q.clientID),
+                                    (q.eventID), (q.occurrenceID));
         case QUERY: {
             int month;
-            try { month = std::stoi(str(q.month)); }
+            try { month = std::stoi((q.month)); }
             catch (...) { return err("mes invalido"); }
             return queryEvents(db, month);
         }
@@ -260,6 +259,8 @@ int main(int argc, char *argv[]) {
         std::string resp;
         if (msg.size() != sizeof(Request)) {
             resp = err("solicitud invalida");
+            sendResponse(rmcSocket, resp);
+            continue;
         } 
 
         Request q{};
@@ -273,7 +274,7 @@ int main(int argc, char *argv[]) {
                     resp = attend(db, q);
                 }
             } catch (const std::exception& e) {
-                resp = err(e.what());
+                resp = err("Error de servidor.");
         }
         std::cout << "[RESP] " << resp << "\n";
         sendResponse(rmcSocket, resp);

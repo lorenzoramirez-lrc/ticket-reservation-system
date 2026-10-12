@@ -37,20 +37,20 @@
 \section{Modelos del sistema}
 
 \subsection{Arquitectonico}
-El sistema implementa un modelo arquitectónico por capas, contando con un total de 3 capas. La primera capa
-es la capa de consumidores donde los procesos clientes solicitan transacciones al gestor de transacciones que 
-pueden ser reservas de asientos, modificaciones de reserva, consulta de eventos en un determinado mes o cancelaciones
-de reserva.
+El sistema implementa un modelo arquitectónico por capas, contando con un total de 3 capas. 
 
-La segunda capa es la capa de servicios de negocio donde se encuentra el gestor de transacciones encargado de
-recibir las solicitudes de los clientes y decidir el servicio de procesamiento y canal que se utilizara para la solicitud.
+La capa de consumidores, donde los procesos clientes envian solicitudes al gestor de transacciones que pueden ser
+reservas de asientos, modificaciones de reserva, consulta de eventos en un determinado mes o cancelaciones de reserva.
+
+La capa de servicios de negocio donde se encuentra el gestor de transacciones encargado de recibir las solicitudes 
+de los clientes y decidir el servicio de procesamiento y canal que se utilizara para la solicitud.
 Las peticiones serán dirigidas por el canal síncrono si se tratan de reservas, consultas o modificaciones, o por el canal 
 asíncrono si es una petición de cancelación. Las peticiones síncronas son procesadas por el servicio de procesamiento
 de reservas/modificaciones/consultas  (RMC), mientras que las peticiones asíncronas son procesadas por el servicio de 
 cancelaciones y notificaciones.
 
-La tercera y última capa es la capa de servicios de almacenamiento que se encarga del manejo de transacciones sobre
-la base de datos principal al recibir solicitudes de escritura y lectura de ambos servicios de procesamiento.
+La capa de servicios de almacenamiento se encarga del manejo de transacciones sobre la base de datos al recibir 
+solicitudes de escritura y lectura de ambos servicios de procesamiento.
 
 \subsection{Interacción}
 
@@ -144,6 +144,25 @@ clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y
 \end{figure}
 
 \subsection{Clases}
+
+Para el diseño del sistema se decidió representar como clases únicamente a los clientes. Como se puede observar 
+existe una clase abstracta BaseClient de la cual heredan las clases QueryUser (consultas de eventos) y MixedUser 
+(consultas y reservas) que sirven para simular clientes para las pruebas de rendimiento, también existe la clase 
+ReserveUser (reserva para una ocurrencia) que se utilizará para simular pruebas de escenarios especificos dentro 
+de la sustentación.
+
+Los parámetros de cada solicitud se envían mediante la estructura Request, que utiliza la enumeración 
+RequestType para indicar el tipo de solicitud.
+
+El resto de elementos del diagrama no representan clases, estructuras o enumeraciones, sino que representan 
+los servicios del sistema (Gestor, RMC, Cancelación y Persistencia). Agrupando en cada caja las funciones que
+implementa el servicio correspondiente.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{clases.png}}
+    \caption{Diagrama de clases.}
+    \label{DiagramaClases}
+\end{figure}
 
 \subsection{Secuencia}
 
