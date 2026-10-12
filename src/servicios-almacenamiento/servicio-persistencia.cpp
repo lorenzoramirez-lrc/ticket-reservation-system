@@ -276,6 +276,9 @@ int main(int argc, char *argv[]) {
             } catch (const std::exception& e) {
                 resp = err("Error de servidor.");
         }
+
+        std::cout<<"Solicitud recibida:"<<q.request<<"\n";
+
         std::cout << "[RESP] " << resp << "\n";
         sendResponse(rmcSocket, resp);
     }
