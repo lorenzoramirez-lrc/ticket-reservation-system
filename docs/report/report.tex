@@ -28,29 +28,36 @@
 
 \author{}
 
-
 \maketitle
 
 \section{Introducción}
+El presente documento describe el diseño e implementación de un sistema distribuido para la gestión 
+de reservas de eventos, orientado al procesamiento concurrente de solicitudes de consulta, reserva, 
+modificación y cancelación. La arquitectura se organiza en capas y utiliza mecanismos de comunicación 
+síncrona y asíncrona mediante ZeroMQ, junto con PostgreSQL para la persistencia de la información.
 
+Asimismo, se plantea una arquitectura escalable y tolerante a fallos, cuyas mejoras se evaluarán mediante 
+pruebas de carga y escenarios de interrupción de servicios. El análisis considera métricas como los tiempos 
+de respuesta, las transacciones por minuto y la capacidad de recuperación del sistema, con el propósito de 
+estudiar su comportamiento bajo diferentes condiciones de carga y fallo.
 
 \section{Modelos del sistema}
 
 \subsection{Arquitectonico}
-El sistema implementa un modelo arquitectónico por capas, contando con un total de 3 capas. La primera capa
-es la capa de consumidores donde los procesos clientes solicitan transacciones al gestor de transacciones que 
-pueden ser reservas de asientos, modificaciones de reserva, consulta de eventos en un determinado mes o cancelaciones
-de reserva.
+El sistema implementa un modelo arquitectónico por capas, contando con un total de 3 capas. 
 
-La segunda capa es la capa de servicios de negocio donde se encuentra el gestor de transacciones encargado de
-recibir las solicitudes de los clientes y decidir el servicio de procesamiento y canal que se utilizara para la solicitud.
+La capa de consumidores, donde los procesos clientes envian solicitudes al gestor de transacciones que pueden ser
+reservas de asientos, modificaciones de reserva, consulta de eventos en un determinado mes o cancelaciones de reserva.
+
+La capa de servicios de negocio donde se encuentra el gestor de transacciones encargado de recibir las solicitudes 
+de los clientes y decidir el servicio de procesamiento y canal que se utilizara para la solicitud.
 Las peticiones serán dirigidas por el canal síncrono si se tratan de reservas, consultas o modificaciones, o por el canal 
 asíncrono si es una petición de cancelación. Las peticiones síncronas son procesadas por el servicio de procesamiento
 de reservas/modificaciones/consultas  (RMC), mientras que las peticiones asíncronas son procesadas por el servicio de 
 cancelaciones y notificaciones.
 
-La tercera y última capa es la capa de servicios de almacenamiento que se encarga del manejo de transacciones sobre
-la base de datos principal al recibir solicitudes de escritura y lectura de ambos servicios de procesamiento.
+La capa de servicios de almacenamiento se encarga del manejo de transacciones sobre la base de datos al recibir 
+solicitudes de escritura y lectura de ambos servicios de procesamiento.
 
 \subsection{Interacción}
 
@@ -87,7 +94,15 @@ Por lo anterior el manejo de excepciones se limita únicamente a fallos por omis
 
 \subsection{Seguridad}
 
-El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. En primer lugar, para la integridad de los datos, se buscará realizar consultas parametrizadas, práctica recurrente al momento de realizar operaciones con una base de datos, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente. Sumado a esto, se validará el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se valida nuevamente en las operaciones la coherencia de los datos que envía el cliente con la información registrada en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita en el código. Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no intervenga con el funcionamiento del servicio.
+El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. 
+En primer lugar, para la integridad de los datos, se buscará realizar consultas parametrizadas, práctica recurrente al momento de realizar operaciones con 
+una base de datos, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. 
+Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente. 
+Sumado a esto, se validará el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se valida nuevamente en las operaciones la coherencia de los 
+datos que envía el cliente con la información registrada en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que 
+no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita 
+en el código. Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no 
+intervenga con el funcionamiento del servicio.
 
 \section{Diseño del sistema}
 
@@ -101,12 +116,12 @@ El diagrama de despliegue (Fig. \ref{DiagramaDespliegue}) expone la distribució
 una siendo una capa de la arquitectura del sistema. De este diagrama se debe destacar los protocolos de comunicación
 seleccionados teniendo en cuenta el modelo de comunicacion sincrónico y asincrónico del sistema. Para ello se utiliza el protocolo
 sincrónico REQ/REP de ZeroMQ para todo el flujo de solicitudes sincrónicas. En el caso de cancelación el cual debe
-ser asincrónico para el cliente se manejan distintos protocolos teniendo en cuenta los requerimientos de comunicación
-entre servicios. Para ello se usa
-el patrón Router/Dealer para las notificaciones al cliente una vez hecha la cancelación y el llamado al gestor de transacciones al
-cliente. Ademas se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional
-y división de tareas considerando las modificaciones a futuro para la escalabilidad del sistema.
-
+ser asincrónico para el cliente se manejan distintos protocolos teniendo en cuenta este requerimiento. El patron Router/Dealer es usado tanto para las
+llamadas al gestor de transacciones como el servicio de notificaciones de cancelacion al cliente. Se utiliza este patron asincronico debido 
+a la necesidad de que el servicio de cancelacion conozca el cliente que hizo la cancelacion y de esa manera pueda enviar de forma oportuna la notificacion.
+Ademas, se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional el cual va acorde con el flujo esperado 
+de la cancelacion. Tambien su control de flujo permite seguir enviando solicitudes de cancelacion a un buffer en caso que el servicio de cancelacion
+este procesando solicitudes lentamente.
 
 \begin{figure}[htbp]
     \centerline{\includegraphics[width=\columnwidth]{despliegue.png}}
@@ -135,6 +150,25 @@ clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y
 \end{figure}
 
 \subsection{Clases}
+
+Para el diseño del sistema se decidió representar como clases únicamente a los clientes. Como se puede observar 
+existe una clase abstracta BaseClient de la cual heredan las clases QueryUser (consultas de eventos) y MixedUser 
+(consultas y reservas) que sirven para simular clientes para las pruebas de rendimiento, también existe la clase 
+ReserveUser (reserva para una ocurrencia) que se utilizará para simular pruebas de escenarios especificos dentro 
+de la sustentación.
+
+Los parámetros de cada solicitud se envían mediante la estructura Request, que utiliza la enumeración 
+RequestType para indicar el tipo de solicitud.
+
+El resto de elementos del diagrama no representan clases, estructuras o enumeraciones, sino que representan 
+los servicios del sistema (Gestor, RMC, Cancelación y Persistencia). Agrupando en cada caja las funciones que
+implementa el servicio correspondiente.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{clases.png}}
+    \caption{Diagrama de clases.}
+    \label{DiagramaClases}
+\end{figure}
 
 \subsection{Secuencia}
 
@@ -176,14 +210,48 @@ Los distintos casos de uso posibles de realizar por el sistema se aprecian en lo
 
 \section{Escalabilidad y tolerancia a fallos}
 
-La escalabilidad y tolerancia a fallos sera llevada a cabo 
+\section{Arquitectura Escalable}
+Para alcanzar una arquitectura del sistema más escalable y tolerante a fallos se añadirán diferentes componentes y
+herramientas para mejorar la arquitectura base propuesta. Considerando el diseño y requerimientos del sistema se determinó que
+los servicios más vulnerables a picos de solicitudes son servicio RMC y la única base de datos, también se considera importante
+mantener una alta disponibilidad del sistema dado el fallo del gestor de transacciones.
 
+El servicio RMC maneja solicitudes de reserva, modificación y consulta, por lo que un aumento de solicitudes concurrentes puede
+incrementar la utilización de recursos y tiempo de respuesta debido a las operaciones que debe hacer al servicio de
+persistencia y acceso a la base de datos.
+Para mejorar la capacidad de procesamiento de este servicio se considera el despliegue de réplicas del servicio RMC junto
+a un balanceador de carga que distribuya las solicitudes mediante una política de Round Robin.
+Se decide mantener la comunicación síncrona en este componente puesto que al manejar solicitudes
+de reserva o modificación el cliente necesita saber el resultado de la operación antes de continuar el proceso.
+
+Considerando la creación de réplicas del servicio RMC el cuello de botella del sistema se vería trasladado a la base de datos.
+Para distribuir la carga de solicitudes de disponibilidad de eventos, las cuales representaran una parte significativa de las solicitudes,
+se propone incorporar replicas destinadas a consultas de lectura manteniendo una única instancia primaria de escritura.
+Esta decisión de diseño implica que se debe considerar la falla de la instancia de escritura mediante la promoción de una
+réplica y la redirección de las conexiones hacia la nueva instancia primaria contemplando posibles retrasos en la propagación de información a
+las réplicas de lectura.
+
+El gestor de transacciones al ser la frontera entre la capa de clientes y la capa de lógica de negocios tiene una importancia crítica
+y es un single point of failure en el sistema. Para no limitar la disponibilidad del sistema y mantener simple la coordinación entre clientes
+y el gestor de transacciones se implementará un mecanismo failover con una instancia del
+gestor preparada para asumir las funciones de la instancia primaria si esta falla. Este componente contemplará la redirección de solicitudes y
+recuperación de operaciones pendientes.
+
+Por otra parte, el servicio de cancelación no tendrá ningún cambio en comparación con la arquitectura inicial.
+Esto decisión de diseño se toma teniendo en cuenta que el servicio de cancelación ya utiliza un modelo de comunicación asíncrono.
+Como se mencionó en el diagrama de despliegue el servicio de cancelación recibe las solicitudes a través del patrón Push/Pull el
+cual permite que el envío de mensajes esté desacoplado del procesamiento de este. Permitiendo que el servicio de cancelación procese las
+solicitudes a su propio ritmo. También es importante mencionar que dado
+los requerimientos que debe cumplir este nodo no se espera que tenga picos de tráfico a diferencia del Servicio RMC, puesto que la mayoría
+del tiempo los actores no estarán realizando solicitudes de cancelación. Por lo anterior se considera que añadir componentes de escalabilidad
+y tolerancia incrementaría la complejidad del sistema sin asegurar mejoras en el desempeño del servicio.
 
 \section{Protocolo de pruebas}
 
 El protocolo de pruebas del sistema contempla diferentes niveles de validacion para asegurar su correcto
 funcionamiento y posterior medicion de rendimiento ante diferentes cargas y tolerancia a fallos.
 
+<<<<<<< HEAD
 Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios sin usar red ni base de datos. 
 Se verificarán las decisiones que tome el RMC frente a distintas solicitudes simulando respuestas recibidas por parte de 
 los otros servicios, además del empaquetado de las mismas y su uso correspondiente.
@@ -196,6 +264,9 @@ En el apartado end to end se plantearán distintos flujos de negocio enfocados e
 con el sistema interactuando desde el Gestor de Transacciones, esperando obtener un resultado concreto para verificar que el flujo de 
 lógica del sistema funcione correctamente. Se contemplan posibles escenarios de múltiples solicitudes al mismo tiempo, distintas
 solicitudes desde el mismo cliente o incluso solicitudes inválidas.
+=======
+Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios
+>>>>>>> 47d5cea4469f6699aed6d4d140781e493229229a
 
 En relacion a las pruebas del sistema distribuido se realizaran pruebas concurrentes con diferentes numeros de clientes 
 que realicen operaciones simultaneamente. De esta manera se evaluara el comportamiento y rendimiento
@@ -252,7 +323,6 @@ se cuantifican las transacciones procesadas de cada tipo durante el periodo de m
 calculando finalmente la tasa de transacciones por minutuo.
 
 \section{Generacion de carga clientes}
-\section{Generación de carga}
 La carga se genera con Locust usando un usuario personalizado en Python que se comunica con el Gestor de Transacciones mediante pyzmq, 
 cada cliente tiene su propio socket REQ y construye cada mensaje con el mismo formato del struct Request.
 
@@ -262,80 +332,6 @@ meses y ocurrencias. La base de datos se carga a partir de ese mismo archivo, de
 En cada solicitud, el cliente elige de forma aleatoria (utilizando la función random.choice de la librería random) el mes en el caso de
 la consulta y el evento, la ocurrencia y el número de asientos en el caso de la reserva. Por lo anterior, se cuenta con dos tipos de 
 cliente: uno que solo consulta y otro que consulta y reserva, lo que permite simular los escenarios de la Tabla 1.
-
-
-\section{Introduction}
-This document is a model and instructions for \LaTeX.
-Please observe the conference page limits. 
-
-
-\subsection{Abbreviations and Acronyms}
-Define abbreviations and acronyms the first time they are used in the text, 
-even after they have been defined in the abstract. Abbreviations such as 
-IEEE, SI, MKS, CGS, ac, dc, and rms do not have to be defined. Do not use 
-abbreviations in the title or heads unless they are unavoidable.
-
-\subsection{Some Common Mistakes}
-\begin{itemize}
-\item The word ``data'' is plural, not singular.
-\item The subscript f ``i.e.'' means ``that is'', and the abbreviation ``e.g.'' means ``for example''.
-\end{itemize}
-
-
-
-\subsection{Figures and Tables}
-\paragraph{Positioning Figures and Tables} Place figures and tables at the top and 
-bottom of columns. Avoid placing them in the middle of columns. Large 
-figures and tables may span across both columns. Figure captions should be 
-below the figures; table heads should appear above the tables. Insert 
-figures and tables after they are cited in the text. Use the abbreviation 
-``Fig.~\ref{fig}'', even at the beginning of a sentence.
-
-\begin{table}[htbp]
-\caption{Table Type Styles}
-\begin{center}
-\begin{tabular}{|c|c|c|c|}
-\hline
-\textbf{Table}&\multicolumn{3}{|c|}{\textbf{Table Column Head}} \\
-\cline{2-4} 
-\textbf{Head} & \textbf{\textit{Table column subhead}}& \textbf{\textit{Subhead}}& \textbf{\textit{Subhead}} \\
-\hline
-copy& More table copy$^{\mathrm{a}}$& &  \\
-\hline
-\multicolumn{4}{l}{$^{\mathrm{a}}$Sample of a Table footnote.}
-\end{tabular}
-\label{tab1}
-\end{center}
-\end{table}
-
-\begin{figure}[htbp]
-\centerline{\includegraphics{fig1.png}}
-\caption{Example of a figure caption.}
-\label{fig}
-\end{figure}
-
-Figure Labels: Use 8 point Times New Roman for Figure labels. Use words 
-rather than symbols or abbreviations when writing Figure axis labels to 
-avoid confusing the reader. As an example, write the quantity 
-``Magnetization'', or ``Magnetization, M'', not just ``M''. If including 
-units in the label, present them within parentheses. Do not label axes only 
-with units. In the example, write ``Magnetization (A/m)'' or ``Magnetization 
-\{A[m(1)]\}'', not just ``A/m''. Do not label axes with a ratio of 
-quantities and units. For example, write ``Temperature (K)'', not 
-``Temperature/K''.
-
-
-\section*{References}
-
-Please number citations consecutively within brackets \cite{b1}. The 
-sentence punctuation follows the bracket \cite{b2}. 
-
-
-\begin{thebibliography}{00}
-\bibitem{b1} G. Eason, B. Noble, and I. N. Sneddon, ``On certain integrals of Lipschitz-Hankel type involving products of Bessel functions,'' Phil. Trans. Roy. Soc. London, vol. A247, pp. 529--551, April 1955.
-\bibitem{b2} J. Clerk Maxwell, A Treatise on Electricity and Magnetism, 3rd ed., vol. 2. Oxford: Clarendon, 1892, pp.68--73.
-
-\end{thebibliography}
 
 \end{document}
 
