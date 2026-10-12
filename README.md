@@ -84,7 +84,16 @@ utilizando database/fill_database.py.
 3. Ejecutar el servicio de persistencia ```./persistencia <ip-persistencia>```.
 4. Ejecutar el servicio RMC ```./rmc <ip-rmc> <ip-persistencia>```.
 5. Ejecutar el servicio de gestion de transacciones ```./gestor <ip-gestor> <ip-rmc>```.
-6. En caso de realizar el pequeño escenario de simulacion ejecutar el siguiente comando 
+6. Ejecutar el script de generacion de datos para los clientes y eventos ```python generate_data.py```
+7. Ejecutar el script para insertar en la base de datos los datos generados en generate_data.py ```python fill_database.py```
+8. En caso de realizar el pequeño escenario de simulacion ejecutar el siguiente comando ```SCENARIO=x locust -f client.py headless -u 1 -r 1 -t 5s ReserveUser```
+Donde x es cualquier nombre de un escenario de simulaion, u el numero de usuarios simulados, r el numero de usuarios que se agregan por segundo y t el tiempo de
+ejecucion de la prueba.
+9. En cualquier otro caso, ejecutar el siguiente comando ```MANAGER_ADDR=<ip-gestor> QUERY_USERS=1 MIXED_USERS=1 RESERVE_USERS=1\
+locust -f client.py --headless -u 3 -r 3 -t 3m QueryUser MixedUser ReserveUser```.
+El numero de usuarios en -u debe coincidir con el total de query, mixed y reserve users.
+Adicionalmente, se pueden definir los parametros correspondientes a la cantidad de solicitudes por minuto y el porcentaje de consultas que realiza QueryUser,
+agregando al inicio del comando las variables ```REQS_PER_MIN=x MIXED_QUERY_PCT=y```.
 
 
 ## Autores
