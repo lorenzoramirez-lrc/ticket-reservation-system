@@ -115,7 +115,9 @@ class BaseClient(User):
     # Función: Elige al azar uno de los meses del archivo de datos y envía, a nombre de este cliente, una solicitud de consulta de los eventos de ese mes.
     def _query(self):
         month = random.choice(DATA["months"])
-        self._send(buildRequest(QUERY, self.clientID, month=month))
+        response = self._send(buildRequest(QUERY, self.clientID, month=month))
+            print(f"cliente={clientID}, "
+                  f"{response}")
 
     # _reserve
     # Parametros de entrada: ninguno
