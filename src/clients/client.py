@@ -116,8 +116,7 @@ class BaseClient(User):
     def _query(self):
         month = random.choice(DATA["months"])
         response = self._send(buildRequest(QUERY, self.clientID, month=month))
-            print(f"cliente={clientID}, "
-                  f"{response}")
+            print(f"cliente={clientID}, {response}")
 
     # _reserve
     # Parametros de entrada: ninguno
