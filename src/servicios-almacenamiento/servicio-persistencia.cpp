@@ -245,7 +245,7 @@ int main(int argc, char *argv[]) {
 
     const char* env = std::getenv("SRB_DB");
     std::string conninfo = env ? env : "host=localhost dbname=event-reservation user=root password=root";
-    pqxx::connection db(conninfo);
+    auto db = std::make_unique<pqxx::connection>(conninfo);
 
     zmq::context_t ctx(1);
     zmq::socket_t rmcSocket(ctx, zmq::socket_type::rep);
@@ -268,10 +268,10 @@ int main(int argc, char *argv[]) {
         
         try {
                 try {
-                    resp = attend(db, q);
+                    resp = attend(*db, q);
                 } catch (const pqxx::broken_connection&) {
-                    db = pqxx::connection(conninfo);   // reconectar y reintentar
-                    resp = attend(db, q);
+                    db = std::make_unique<pqxx::connection>(conninfo);   // reconectar y reintentar
+                    resp = attend(*db, q);
                 }
             } catch (const std::exception& e) {
                 resp = err("Error de servidor.");
