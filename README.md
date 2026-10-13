@@ -80,11 +80,19 @@ de los servicios referirse a [`docs/diagrams/despliegue.png`](docs/diagrams/desp
 1. Levantar base de datos ejecutando desde database/ ```docker compose up -d```. En caso de que se quiera iniciar el servicio desde cero
 se debe ejecutar ```docker compose down -v``` y nuevamente ```docker compose up -d```.
 2. La base de datos contiene dos eventos de prueba para un pequeño escenario de simulacion. Sin embargo se puede generar una mayor carga de eventos
-utilizando database/fill_database.py.
+utilizando ```database/fill_database.py```.
 3. Ejecutar el servicio de persistencia ```./persistencia <ip-persistencia>```.
 4. Ejecutar el servicio RMC ```./rmc <ip-rmc> <ip-persistencia>```.
 5. Ejecutar el servicio de gestion de transacciones ```./gestor <ip-gestor> <ip-rmc>```.
-6. En caso de realizar el pequeño escenario de simulacion ejecutar el siguiente comando 
+6. Ejecutar el script de generacion de datos para los clientes y eventos ```python generate_data.py```
+7. En caso de realizar el pequeño escenario de simulación ejecutar el siguiente comando ```MANAGER_ADDR=<ip-gestor> SCENARIO=x locust -f client.py headless -u 1 -r 1 -t 5s ReserveUser```
+   Donde x es cualquier nombre de un escenario de simulacion, u el numero de usuarios simulados, r el numero de usuarios que se agregan por segundo y t el tiempo de ejecucion de la prueba.
+8. En cualquier otro caso se llena la base de datos con los datos generados en generate_data.py ```python fill_database.py``` y se utiliza
+   el siguiente comando ```MANAGER_ADDR=<ip-gestor> QUERY_USERS=1 MIXED_USERS=1 RESERVE_USERS=1\
+locust -f client.py --headless -u 3 -r 3 -t 3m QueryUser MixedUser ReserveUser```.
+El numero de usuarios en -u debe coincidir con el total de query, mixed y reserve users.
+Adicionalmente, se pueden definir los parametros correspondientes a la cantidad de solicitudes por minuto y el porcentaje de consultas que realiza QueryUser,
+agregando al inicio del comando las variables ```REQS_PER_MIN=x MIXED_QUERY_PCT=y```.
 
 
 ## Autores

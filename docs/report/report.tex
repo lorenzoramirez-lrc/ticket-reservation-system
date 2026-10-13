@@ -17,6 +17,7 @@
     \large 
     Richard Manuel Castillo Pesca \\
     Lorenzo Ramírez Calderón \\
+    Nicolas Sanchez Luengas
 
     \vspace{1cm}
     Pontificia Universidad Javeriana \\ 
@@ -208,8 +209,6 @@ Los distintos casos de uso posibles de realizar por el sistema se aprecian en lo
     \label{SecCancelarReserva}
 \end{figure}
 
-\section{Escalabilidad y tolerancia a fallos}
-
 \section{Arquitectura Escalable}
 Para alcanzar una arquitectura del sistema más escalable y tolerante a fallos se añadirán diferentes componentes y
 herramientas para mejorar la arquitectura base propuesta. Considerando el diseño y requerimientos del sistema se determinó que
@@ -251,7 +250,6 @@ y tolerancia incrementaría la complejidad del sistema sin asegurar mejoras en e
 El protocolo de pruebas del sistema contempla diferentes niveles de validacion para asegurar su correcto
 funcionamiento y posterior medicion de rendimiento ante diferentes cargas y tolerancia a fallos.
 
-<<<<<<< HEAD
 Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios sin usar red ni base de datos. 
 Se verificarán las decisiones que tome el RMC frente a distintas solicitudes simulando respuestas recibidas por parte de 
 los otros servicios, además del empaquetado de las mismas y su uso correspondiente.
@@ -264,9 +262,6 @@ En el apartado end to end se plantearán distintos flujos de negocio enfocados e
 con el sistema interactuando desde el Gestor de Transacciones, esperando obtener un resultado concreto para verificar que el flujo de 
 lógica del sistema funcione correctamente. Se contemplan posibles escenarios de múltiples solicitudes al mismo tiempo, distintas
 solicitudes desde el mismo cliente o incluso solicitudes inválidas.
-=======
-Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios
->>>>>>> 47d5cea4469f6699aed6d4d140781e493229229a
 
 En relacion a las pruebas del sistema distribuido se realizaran pruebas concurrentes con diferentes numeros de clientes 
 que realicen operaciones simultaneamente. De esta manera se evaluara el comportamiento y rendimiento

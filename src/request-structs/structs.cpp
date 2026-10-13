@@ -20,8 +20,22 @@ void copy(char (&destiny)[N], const std::string &origin) {
     destiny[N - 1] = '\0';
 }
 
+const char *requestTypeName(RequestType type) {
+    switch (type) {
+        case RESERVE:           return "RESERVE";
+        case CANCEL:            return "CANCEL";
+        case QUERY:             return "QUERY";
+        case MODIFY_QUANTITY:   return "MODIFY_QUANTITY";
+        case MODIFY_OCCURRENCE: return "MODIFY_OCCURRENCE";
+        case CHECK_SEATS:       return "CHECK_SEATS";
+        case CHECK_RESERVATION: return "CHECK_RESERVATION";
+        case CHECK_OCCURRENCES: return "CHECK_OCCURRENCES";
+        default:                return "DESCONOCIDO";
+    }
+}
+
 void printRequest(const Request& r) {
-    std::cout << "Request: " << r.request
+    std::cout << "Request: " << requestTypeName(r.request)
               << " | Client: " << r.clientID << '\n';
 }
 
