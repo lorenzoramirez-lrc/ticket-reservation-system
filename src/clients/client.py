@@ -9,6 +9,7 @@ import random
 import struct
 from itertools import cycle
 
+import gevent
 import zmq.green as zmq
 from locust import User, task, constant_throughput
 from locust.exception import StopUser
@@ -73,8 +74,10 @@ class BaseClient(User):
         self.ctx = zmq.Context()
         self.clientID = next(CLIENT_POOL)
         self.reservations = []
+        self._running = True
         self._connect()
         self._connect_notifications()
+        self._notification_greenlet = gevent.spawn(self.receive_notification)
 
     # _connect
     # Parametros de entrada: ninguno
@@ -98,12 +101,28 @@ class BaseClient(User):
         self.notification_sock.setsockopt(zmq.IDENTITY, str(self.clientID).encode("utf-8"))
         self.notification_sock.connect(NOTIFICATION_ADDR)
 
+    # receive_notification
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Escucha de forma continua y no bloqueante (en un greenlet) las notificaciones enviadas por el
+    # Servicio de Cancelación a través de notification_sock y las imprime en consola.
+    def receive_notification(self):
+        while self._running:
+            try:
+                notification = self.notification_sock.recv().decode(errors="replace")
+                print(f"[CLIENTE {self.clientID}] Notificacion recibida: {notification}", flush=True)
+            except zmq.ZMQError:
+                break
+
     # on_stop
     # Parametros de entrada: ninguno
     # Parametros de salida: ninguno
-    # Función: Locust lo ejecuta cuando el cliente termina. Cierra los sockets y el contexto de ZeroMQ para liberar los recursos.
+    # Función: Locust lo ejecuta cuando el cliente termina. Detiene el listener de notificaciones y cierra los sockets y el contexto de ZeroMQ para liberar los recursos.
     def on_stop(self):
         print()
+        self._running = False
+        if getattr(self, "_notification_greenlet", None):
+            self._notification_greenlet.kill(block=False)
         self.notification_sock.close()
         self.sock.close()
         self.ctx.term()

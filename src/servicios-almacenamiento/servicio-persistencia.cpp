@@ -254,6 +254,8 @@ std::string attend(pqxx::connection& db, const Request& q) {
         case MODIFY_OCCURRENCE:
             return modifyOccurrence(db, (q.reservationID), (q.clientID),
                                     (q.eventID), (q.occurrenceID));
+        case CANCEL:
+            return cancelReservation(db, (q.reservationID), (q.clientID));
         case QUERY: {
             int month;
             try { month = std::stoi((q.month)); }
