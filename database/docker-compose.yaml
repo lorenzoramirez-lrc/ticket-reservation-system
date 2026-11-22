@@ -43,7 +43,7 @@ services:
       PGDATA: /var/lib/postgresql/data
       REPLICATION_PASSWORD: root
     ports:
-      - "127.0.0.1:5433:5432"
+      - "5433:5432"
     volumes:
       - postgres_replica_data:/var/lib/postgresql/data
       - ./replication/replica-entrypoint.sh:/usr/local/bin/replica-entrypoint.sh:ro

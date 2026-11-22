@@ -268,6 +268,10 @@ std::string attend(pqxx::connection& db, const Request& q) {
     return err("solicitud desconocida");
 }
 
+bool useReplica(const Request& request) {
+    return request.request == QUERY;
+}
+
 int main(int argc, char *argv[]) {
 
 
@@ -281,15 +285,19 @@ int main(int argc, char *argv[]) {
     ipPersistence+=argv[1];
     ipPersistence+=":8888";
 
-    const char* env = std::getenv("SRB_DB");
-    std::string conninfo = env ? env : "host=localhost dbname=event-reservation user=root password=root";
-    auto db = std::make_unique<pqxx::connection>(conninfo);
+
+    std::string primaryConninfo = "host=localhost port=5432 dbname=event-reservation user=root password=root";
+    std::string replicaConninfo = "host=localhost port=5433 dbname=event-reservation user=root password=root";
+
+    auto primaryDB = std::make_unique<pqxx::connection>(primaryConninfo);
+    auto replicaDB = std::make_unique<pqxx::connection>(replicaConninfo);
 
     zmq::context_t ctx(1);
     zmq::socket_t rmcSocket(ctx, zmq::socket_type::rep);
     rmcSocket.bind(ipPersistence);
 
     while (true) {
+
         zmq::message_t msg;
         auto result = rmcSocket.recv(msg, zmq::recv_flags::none);
         if (!result) continue;
@@ -303,17 +311,32 @@ int main(int argc, char *argv[]) {
 
         Request q{};
         memcpy(&q, msg.data(), sizeof(Request));
-        
+
         try {
-                try {
-                    resp = attend(*db, q);
-                } catch (const pqxx::broken_connection&) {
-                    db = std::make_unique<pqxx::connection>(conninfo);   // reconectar y reintentar
-                    resp = attend(*db, q);
+            bool readReplica = useReplica(q);
+
+            auto& selectedDB = readReplica ? replicaDB : primaryDB;
+
+            const std::string& conninfo =
+                readReplica ? replicaConninfo : primaryConninfo;
+
+            try {
+                resp = attend(*selectedDB, q);
+            } catch (const pqxx::broken_connection&) {
+                selectedDB = std::make_unique<pqxx::connection>(conninfo);
+
+                // Reintento automático solo para consultas de lectura.
+                if (readReplica) {
+                    resp = attend(*selectedDB, q);
+                } else {
+                    resp = err("Conexion perdida; resultado de operacion desconocido");
                 }
-            } catch (const std::exception& e) {
-                resp = err("Error de servidor.");
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "[PERSISTENCIA] " << e.what() << '\n';
+            resp = err("Error de servidor");
         }
+
 
         std::cout<<"Solicitud recibida:"<<q.request<<"\n";
 
