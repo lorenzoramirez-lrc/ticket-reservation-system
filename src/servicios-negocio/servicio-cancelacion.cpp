@@ -60,17 +60,10 @@ std::string checkReservation(zmq::socket_t &persistenceSocket, std::string reser
 /* cancelReservation
 Parametros de entrada: socket del zmq/persistencia (zmq), id del cliente (String), id de la reserva (String)
 Parametros de salida: String
-Función: Llama a checkReservation para comprobar que la reserva exista y esté activa; si es válida, genera la solicitud de tipo CANCEL, la envía al servicio de persistencia y retorna su resultado.
+Función: Genera la solicitud de tipo CANCEL y la envía al servicio de persistencia, que en una sola transacción verifica que la reserva exista,
+         esté activa y pertenezca al cliente, libera sus asientos y la marca como cancelada. Retorna el resultado de persistencia.
 */
 std::string cancelReservation(zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID) {
-    std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
-
-    try {
-        std::stoi(check_res);
-    } catch (...) {
-        return check_res;
-    }
-
     Request cancel{};
     cancel.request = CANCEL;
     copy(cancel.clientID, clientID);
@@ -140,7 +133,6 @@ int main(int argc, char *argv[]) {
         }
 
         std::cout << "[CANCELACION] Respuesta para " << clientID << ": " << cancelResponse << std::endl;
-
-        sendNotification(notificationSocket, clientID, cancelResponse);
+        sendNotification(notificationSocket, clientID, reservationID + "|" + cancelResponse);
     }
 }

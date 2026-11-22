@@ -74,6 +74,7 @@ class BaseClient(User):
         self.ctx = zmq.Context()
         self.clientID = next(CLIENT_POOL)
         self.reservations = []
+        self.pending_cancellations = {
         self._running = True
         self._connect()
         self._connect_notifications()
@@ -105,14 +106,35 @@ class BaseClient(User):
     # Parametros de entrada: ninguno
     # Parametros de salida: ninguno
     # Función: Escucha de forma continua y no bloqueante (en un greenlet) las notificaciones enviadas por el
-    # Servicio de Cancelación a través de notification_sock y las imprime en consola.
+    # Servicio de Cancelación a través de notification_sock. Cada notificación recibida se decodifica y se
+    # entrega a _handle_notification para procesarla. El bucle termina cuando el cliente se detiene o el socket se cierra.
     def receive_notification(self):
         while self._running:
             try:
                 notification = self.notification_sock.recv().decode(errors="replace")
-                print(f"[CLIENTE {self.clientID}] Notificacion recibida: {notification}", flush=True)
             except zmq.ZMQError:
                 break
+            self._handle_notification(notification)
+
+
+    # _handle_notification
+    # Parametros de entrada: texto de la notificación, con el formato "<id de la reserva>|<resultado>"
+    # Parametros de salida: ninguno
+    # Función: Busca entre las cancelaciones pendientes (self.pending_cancellations) la reserva a la que se refiere la notificación.
+    # Si el resultado empieza con ERROR, la cancelación no se efectuó y la reserva vuelve a self.reservations (sigue activa);
+    # si no, la reserva ya está cancelada y se descarta. Si la notificación no tiene el formato esperado, solo se imprime.
+    def _handle_notification(self, notification):
+        reservationID, separator, result = notification.partition("|")
+        if not separator:
+            print(f"[CLIENTE {self.clientID}] Notificacion recibida: {notification}", flush=True)
+            return
+
+        res = self.pending_cancellations.pop(reservationID, None)
+        if res is not None and result.startswith("ERROR"):
+            self.reservations.append(res)
+
+        print(f"[CLIENTE {self.clientID}] Notificacion recibida: reserva {reservationID} -> {result}", flush=True)
+
 
     # on_stop
     # Parametros de entrada: ninguno
@@ -218,18 +240,24 @@ class BaseClient(User):
 
         print(f"cliente={self.clientID}, reserva {res['id']}: cambio de cantidad a {newQuantity} -> {response}")
 
+    # _cancel
     # Parametros de entrada: reserva a cancelar (diccionario con id, evento, ocurrencia y cantidad)
     # Parametros de salida: ninguno
-    # Función: Envía una solicitud CANCEL con el ID de la reserva. Si el sistema la acepta
-    # (la respuesta no empieza con ERROR), elimina la reserva de self.reservations.
+    # Función: Envía una solicitud CANCEL con el ID de la reserva. La cancelación es asíncrona: el gestor solo confirma que recibió
+    # la solicitud, y el resultado real llega después por notificación (_handle_notification). Mientras tanto, la reserva pasa de
+    # self.reservations a self.pending_cancellations, para no volver a elegirla. Se mueve antes de enviar porque la notificación
+    # podría llegar antes de que este método termine. Si el gestor rechaza la solicitud (ERROR), la reserva vuelve a self.reservations.
     def _cancel(self, res):
+        self.reservations.remove(res)
+        self.pending_cancellations[res["id"]] = res
+
         response = self._send(buildRequest(CANCEL, self.clientID, reservationID=res["id"])).decode(errors="replace")
 
-        if not response.startswith("ERROR"):
-            self.reservations.remove(res)
+        if response.startswith("ERROR"):
+            self.pending_cancellations.pop(res["id"], None)
+            self.reservations.append(res)
 
-        print(f"cliente={self.clientID}, reserva {res['id']} cancelada -> {response}")
-
+        print(f"cliente={self.clientID}, solicitud de cancelacion de {res['id']} -> {response}")
 
 # Clase QueryUser
 # Cliente simulado que solo realiza consultas de eventos
