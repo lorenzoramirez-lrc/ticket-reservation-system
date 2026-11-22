@@ -119,22 +119,25 @@ std::string reserveSeats (zmq::socket_t &persistenceSocket, std::string clientID
 /* modifyQuantity
 Parametros de entrada: socket del zmq/persistencia (zmq), id del cliente (String), id de la reserva (String), nueva cantidad solicitada (int), id del evento (String), id de la ocurrencia (String)
 Parametros de salida: String
-Función: Llama a la función checkReservation para comprobar la existencia de la reserva, después verifica si la nueva cantidad solicitada es mayor o menor a la actual, invoca a la función checkSeats para ver si se puede hace el cambio y en caso oportuno genera la solicitud tipo MODIFY_QUANTITY para enviarla al socket de persistencia y retornar su resultado.
+Función: Valida que la nueva cantidad sea positiva, llama a checkReservation para comprobar la existencia de la reserva y obtener su cantidad actual,
+         y si la nueva cantidad es mayor, invoca a checkSeats con la diferencia (los asientos adicionales) para ver si hay cupo.
+         Finalmente genera la solicitud tipo MODIFY_QUANTITY para enviarla al socket de persistencia y retornar su resultado.
 */
 std::string modifyQuantity (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID, int newQuantity, std::string eventID, std::string occurenceID){
     if (newQuantity <= 0) return "ERROR: Cantidad invalida";
+
     std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
 
     int current;
     try {
         current = std::stoi(check_res);
     }catch (...) {
-        return check_res;   
+        return check_res;
     }
 
     int extra = newQuantity - current;
     if (extra > 0){
-        std::string check_seats = checkSeats(persistenceSocket, eventID, occurenceID, extra);
+        std::string check_seats = checkSeats(persistenceSocket, eventID, occurenceID, extra);   // solo los asientos adicionales
         if (check_seats != "OK") return check_seats;
     }
 

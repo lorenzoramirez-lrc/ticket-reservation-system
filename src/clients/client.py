@@ -19,6 +19,7 @@ RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_R
 
 # Variables de entorno
 MANAGER_ADDR = os.environ.get("MANAGER_ADDR", "tcp://10.43.100.20:5555")
+NOTIFICATION_ADDR = os.environ.get("NOTIFICATION_ADDR", "tcp://10.43.99.201:9999")
 REQS_PER_MIN = float(os.environ.get("REQS_PER_MIN", 30))
 
 # Datos de carga (clientes, eventos, ocurrencias y meses), los mismos con los que se llena la BD
@@ -71,7 +72,9 @@ class BaseClient(User):
     def on_start(self):
         self.ctx = zmq.Context()
         self.clientID = next(CLIENT_POOL)
+        self.reservations = []
         self._connect()
+        self._connect_notifications()
 
     # _connect
     # Parametros de entrada: ninguno
@@ -83,14 +86,29 @@ class BaseClient(User):
         self.sock.setsockopt(zmq.LINGER, 0)
         self.sock.connect(MANAGER_ADDR)
 
+    # _connect_notifications
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Crea un socket DEALER de ZeroMQ y lo conecta a la dirección del servicio de notificaciones (NOTIFICATION_ADDR).
+    # Configura la identidad del cliente mediante CLIENT_ID para que el ROUTER pueda identificarlo y enviarle las notificaciones correspondientes.
+    # Con LINGER en 0, el socket se cierra sin esperar a que se envíen los mensajes pendientes.
+    def _connect_notifications(self):
+        self.notification_sock = self.ctx.socket(zmq.DEALER)
+        self.notification_sock.setsockopt(zmq.LINGER, 0)
+        self.notification_sock.setsockopt(zmq.IDENTITY, str(self.clientID).encode("utf-8"))
+        self.notification_sock.connect(NOTIFICATION_ADDR)
+
     # on_stop
     # Parametros de entrada: ninguno
     # Parametros de salida: ninguno
-    # Función: Locust lo ejecuta cuando el cliente termina. Cierra el socket y el contexto de ZeroMQ para liberar los recursos.
+    # Función: Locust lo ejecuta cuando el cliente termina. Cierra los sockets y el contexto de ZeroMQ para liberar los recursos.
     def on_stop(self):
         print()
+        self.notification_sock.close()
         self.sock.close()
         self.ctx.term()
+        
+
 
     # _send
     # Parametros de entrada: mensaje de la solicitud en bytes, construido previamente con buildRequest
@@ -116,18 +134,82 @@ class BaseClient(User):
     def _query(self):
         month = random.choice(DATA["months"])
         response = self._send(buildRequest(QUERY, self.clientID, month=month))
-        print(f"cliente={clientID}, {response}")
+        print(f"cliente={self.clientID}, consulta de {month} -> {response.decode(errors='replace')}") 
 
     # _reserve
     # Parametros de entrada: ninguno
     # Parametros de salida: ninguno (la respuesta se recibe, pero no se usa)
     # Función: Elige al azar un evento y una de sus ocurrencias del archivo de datos, y envía, a nombre de este cliente,
-    # una solicitud de reserva de entre 1 y 4 asientos.
+    # una solicitud de reserva de entre 1 y 4 asientos. Si la reserva se confirma (la respuesta es "OK:<id de la reserva>"),
+    # guarda el ID, el evento, la ocurrencia y la cantidad, que se necesitan después para modificarla.
     def _reserve(self):
         event = random.choice(DATA["events"])
         occurrenceID = random.choice(event["occurrences"])
-        self._send(buildRequest(RESERVE, self.clientID, event["eventID"],
-                                occurrenceID, quantity=random.randint(1, 4)))
+        quantity = random.randint(1, 4)
+        response = self._send(buildRequest(RESERVE, self.clientID, event["eventID"],
+                                           occurrenceID, quantity=quantity)).decode(errors="replace")
+        print(f"cliente={self.clientID}, reserva de {quantity} en {occurrenceID} -> {response}")
+
+        if response.startswith("OK:"):                                                      
+            self.reservations.append({"id": response.split(":", 1)[1].strip(),
+                                      "eventID": event["eventID"],
+                                      "occurrenceID": occurrenceID,
+                                      "quantity": quantity})
+
+    # _otherOccurrence
+    # Parametros de entrada: reserva (diccionario con id, evento, ocurrencia y cantidad)
+    # Parametros de salida: ID de la otra ocurrencia del evento, o None si el evento solo tiene una
+    # Función: Cada evento tiene una o dos ocurrencias. Si tiene dos, devuelve la que no es la actual de la reserva.
+    def _otherOccurrence(self, res):
+        event = next(e for e in DATA["events"] if e["eventID"] == res["eventID"])
+        occurrences = event["occurrences"]
+        if len(occurrences) < 2:
+            return None
+        return occurrences[1] if occurrences[0] == res["occurrenceID"] else occurrences[0]
+
+    # _modifyOccurrence
+    # Parametros de entrada: reserva a modificar (diccionario con id, evento, ocurrencia y cantidad)
+    # Parametros de salida: ninguno
+    # Función: Cambia la reserva a la otra ocurrencia de su evento (_otherOccurrence). Envía una solicitud MODIFY_OCCURRENCE
+    # y, si el sistema la acepta (la respuesta no empieza con ERROR), actualiza la ocurrencia guardada de la reserva.
+    # Si el evento solo tiene una ocurrencia, no envía nada, porque no hay a dónde cambiarla.
+    def _modifyOccurrence(self, res):
+        newOccurrence = self._otherOccurrence(res)
+        if newOccurrence is None:
+            print(f"cliente={self.clientID}, reserva {res['id']}: el evento {res['eventID']} solo tiene una ocurrencia")
+            return                                  
+
+        response = self._send(buildRequest(MODIFY_OCCURRENCE, self.clientID, res["eventID"], newOccurrence,
+                                       reservationID=res["id"])).decode(errors="replace")
+        if not response.startswith("ERROR"):
+            res["occurrenceID"] = newOccurrence
+
+        print(f"cliente={self.clientID}, reserva {res['id']}: cambio de ocurrencia a {newOccurrence} -> {response}")
+
+    # _modifyQuantity
+    # Parametros de entrada: reserva a modificar (diccionario con id, evento, ocurrencia y cantidad), nueva cantidad de asientos (int)
+    # Parametros de salida: ninguno
+    # Función: Envía una solicitud MODIFY_QUANTITY con la nueva cantidad y, si el sistema la acepta (la respuesta no
+    # empieza con ERROR), actualiza la cantidad guardada de la reserva.
+    def _modifyQuantity(self, res, newQuantity):
+        response = self._send(buildRequest(MODIFY_QUANTITY, self.clientID, res["eventID"], res["occurrenceID"],
+                                       reservationID=res["id"], quantity=newQuantity)).decode(errors="replace")
+        if not response.startswith("ERROR"):
+            res["quantity"] = newQuantity
+
+        print(f"cliente={self.clientID}, reserva {res['id']}: cambio de cantidad a {newQuantity} -> {response}")
+
+    # Parametros de entrada: reserva a cancelar (diccionario con id, evento, ocurrencia y cantidad)
+    # Parametros de salida: ninguno
+    # Función: Envía una solicitud CANCEL con el ID de la reserva. Si el sistema la acepta
+    # (la respuesta no empieza con ERROR), elimina la reserva de self.reservations.
+    def _cancel(self, res):
+        response = self._send(buildRequest(CANCEL, self.clientID, reservationID=res["id"])).decode(errors="replace")
+
+        if not response.startswith("ERROR"):
+            self.reservations.remove(res)
+
+        print(f"cliente={self.clientID}, reserva {res['id']} cancelada -> {response}")
 
 
 # Clase QueryUser
@@ -143,28 +225,6 @@ class QueryUser(BaseClient):
     @task
     def query(self):
         self._query()
-
-
-# Clase MixedUser
-# Cliente simulado que alterna consultas de eventos y reservas
-# La cantidad de clientes de este tipo se define con la variable de entorno MIXED_USERS (1 por defecto) y el
-# porcentaje de consultas con MIXED_QUERY_PCT (50 por defecto), el resto de las solicitudes son reservas
-class MixedUser(BaseClient):
-    fixed_count = int(os.environ.get("MIXED_USERS", 1))
-    query_pct = float(os.environ.get("MIXED_QUERY_PCT", 50))
-
-    # mixed
-    # Parametros de entrada: ninguno
-    # Parametros de salida: ninguno
-    # Función: Tarea de Locust. Genera un número aleatorio entre 0 y 100: si es menor que el porcentaje de consultas,
-    # el cliente hace una consulta (_query), y si no, una reserva (_reserve).
-    @task
-    def mixed(self):
-        if random.uniform(0, 100) < self.query_pct:
-            self._query()
-        else:
-            self._reserve()
-
 
 # Clase ReserveUser
 # Cliente que realiza reservas. Su comportamiento depende de la variable de entorno SCENARIO:
@@ -212,3 +272,82 @@ class ReserveUser(BaseClient):
         @task
         def reserve(self):
             self._reserve()
+
+# Clase MixedUser
+# Cliente simulado que alterna consultas de eventos y reservas
+# La cantidad de clientes de este tipo se define con la variable de entorno MIXED_USERS (1 por defecto) y el
+# porcentaje de consultas con MIXED_QUERY_PCT (50 por defecto), el resto de las solicitudes son reservas
+class MixedUser(BaseClient):
+    fixed_count = int(os.environ.get("MIXED_USERS", 1))
+    query_pct = float(os.environ.get("MIXED_QUERY_PCT", 50))
+
+    # mixed
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Tarea de Locust. Genera un número aleatorio entre 0 y 100: si es menor que el porcentaje de consultas,
+    # el cliente hace una consulta (_query), y si no, una reserva (_reserve).
+    @task
+    def mixed(self):
+        if random.uniform(0, 100) < self.query_pct:
+            self._query()
+        else:
+            self._reserve()
+
+# Clase ModifyUser
+# Cliente que primero realiza una reserva y después modifica una de las reservas
+# que él mismo creó (cambiando la cantidad de asientos o la ocurrencia).
+# La cantidad de clientes de este tipo se define con la variable de entorno
+# MODIFY_USERS (2 por defecto), lo que permite correr al menos dos clientes
+# de forma concurrente.
+class ModifyUser(BaseClient):
+    fixed_count = int(os.environ.get("MODIFY_USERS", 2))
+
+    # reserve_and_modify
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Tarea de Locust. Primero realiza una reserva (_reserve). Si la
+    # reserva se confirma y se guarda en self.reservations, elige una de ellas
+    # al azar y aplica una de las dos variantes de modificación:
+    #   - MODIFY_QUANTITY: cambia la cantidad de asientos (entre 1 y 4).
+    #   - MODIFY_OCCURRENCE: cambia la reserva a la otra ocurrencia del evento
+    #     (si el evento tiene dos ocurrencias).
+    @task
+    def reserve_and_modify(self):
+        self._reserve()
+
+        if not self.reservations:
+            return
+
+        res = random.choice(self.reservations)
+
+        if random.random() < 0.5:
+            new_quantity = random.randint(1, 4)
+            while new_quantity == res["quantity"]:
+                new_quantity = random.randint(1, 4)
+            self._modifyQuantity(res, new_quantity)
+        else:
+            self._modifyOccurrence(res)
+
+# Clase CancelUser
+# Cliente que primero realiza una reserva y después la cancela.
+# La cantidad de clientes de este tipo se define con la variable de entorno
+# CANCEL_USERS (2 por defecto), lo que permite correr al menos dos clientes
+# de forma concurrente.
+class CancelUser(BaseClient):
+    fixed_count = int(os.environ.get("CANCEL_USERS", 2))
+
+    # reserve_and_cancel
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Tarea de Locust. Primero realiza una reserva (_reserve). Si la
+    # reserva se confirma y se guarda en self.reservations, elige una de ellas
+    # al azar y la cancela (_cancel).
+    @task
+    def reserve_and_cancel(self):
+        self._reserve()
+
+        if not self.reservations:
+            return
+
+        res = random.choice(self.reservations)
+        self._cancel(res)
