@@ -74,7 +74,7 @@ class BaseClient(User):
         self.ctx = zmq.Context()
         self.clientID = next(CLIENT_POOL)
         self.reservations = []
-        self.pending_cancellations = {
+        self.pending_cancellations = {}
         self._running = True
         self._connect()
         self._connect_notifications()
