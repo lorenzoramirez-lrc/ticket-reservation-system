@@ -19,6 +19,7 @@ RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_R
 
 # Variables de entorno
 MANAGER_ADDR = os.environ.get("MANAGER_ADDR", "tcp://10.43.100.20:5555")
+NOTIFICATION_ADDR = os.environ.get("NOTIFICATION_ADDR", "tcp://10.43.99.201:9999")
 REQS_PER_MIN = float(os.environ.get("REQS_PER_MIN", 30))
 
 # Datos de carga (clientes, eventos, ocurrencias y meses), los mismos con los que se llena la BD
@@ -73,6 +74,7 @@ class BaseClient(User):
         self.clientID = next(CLIENT_POOL)
         self.reservations = []
         self._connect()
+        self._connect_notifications()
 
     # _connect
     # Parametros de entrada: ninguno
@@ -84,14 +86,29 @@ class BaseClient(User):
         self.sock.setsockopt(zmq.LINGER, 0)
         self.sock.connect(MANAGER_ADDR)
 
+    # _connect_notifications
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Crea un socket DEALER de ZeroMQ y lo conecta a la dirección del servicio de notificaciones (NOTIFICATION_ADDR).
+    # Configura la identidad del cliente mediante CLIENT_ID para que el ROUTER pueda identificarlo y enviarle las notificaciones correspondientes.
+    # Con LINGER en 0, el socket se cierra sin esperar a que se envíen los mensajes pendientes.
+    def _connect_notifications(self):
+        self.notification_sock = self.ctx.socket(zmq.DEALER)
+        self.notification_sock.setsockopt(zmq.LINGER, 0)
+        self.notification_sock.setsockopt(zmq.IDENTITY, str(self.clientID).encode("utf-8"))
+        self.notification_sock.connect(NOTIFICATION_ADDR)
+
     # on_stop
     # Parametros de entrada: ninguno
     # Parametros de salida: ninguno
-    # Función: Locust lo ejecuta cuando el cliente termina. Cierra el socket y el contexto de ZeroMQ para liberar los recursos.
+    # Función: Locust lo ejecuta cuando el cliente termina. Cierra los sockets y el contexto de ZeroMQ para liberar los recursos.
     def on_stop(self):
         print()
+        self.notification_sock.close()
         self.sock.close()
         self.ctx.term()
+        
+
 
     # _send
     # Parametros de entrada: mensaje de la solicitud en bytes, construido previamente con buildRequest
@@ -182,6 +199,18 @@ class BaseClient(User):
 
         print(f"cliente={self.clientID}, reserva {res['id']}: cambio de cantidad a {newQuantity} -> {response}")
 
+    # Parametros de entrada: reserva a cancelar (diccionario con id, evento, ocurrencia y cantidad)
+    # Parametros de salida: ninguno
+    # Función: Envía una solicitud CANCEL con el ID de la reserva. Si el sistema la acepta
+    # (la respuesta no empieza con ERROR), elimina la reserva de self.reservations.
+    def _cancel(self, res):
+        response = self._send(buildRequest(CANCEL, self.clientID, reservationID=res["id"])).decode(errors="replace")
+
+        if not response.startswith("ERROR"):
+            self.reservations.remove(res)
+
+        print(f"cliente={self.clientID}, reserva {res['id']} cancelada -> {response}")
+
 
 # Clase QueryUser
 # Cliente simulado que solo realiza consultas de eventos
@@ -196,8 +225,6 @@ class QueryUser(BaseClient):
     @task
     def query(self):
         self._query()
-
-class ModifyUser(BaseClient):
 
 # Clase ReserveUser
 # Cliente que realiza reservas. Su comportamiento depende de la variable de entorno SCENARIO:
@@ -301,3 +328,26 @@ class ModifyUser(BaseClient):
         else:
             self._modifyOccurrence(res)
 
+# Clase CancelUser
+# Cliente que primero realiza una reserva y después la cancela.
+# La cantidad de clientes de este tipo se define con la variable de entorno
+# CANCEL_USERS (2 por defecto), lo que permite correr al menos dos clientes
+# de forma concurrente.
+class CancelUser(BaseClient):
+    fixed_count = int(os.environ.get("CANCEL_USERS", 2))
+
+    # reserve_and_cancel
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Tarea de Locust. Primero realiza una reserva (_reserve). Si la
+    # reserva se confirma y se guarda en self.reservations, elige una de ellas
+    # al azar y la cancela (_cancel).
+    @task
+    def reserve_and_cancel(self):
+        self._reserve()
+
+        if not self.reservations:
+            return
+
+        res = random.choice(self.reservations)
+        self._cancel(res)
