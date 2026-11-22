@@ -197,6 +197,42 @@ std::string modifyOccurrence(pqxx::connection& db, const std::string& reservatio
     return "OK";
 }
 
+/* cancelReservation
+Parametros de entrada: conexión con la db, id de la reserva (String), id del cliente (String)
+Parametros de salida: String (OK si se pudo, Error si no)
+Función: Verifica que la reserva exista, esté activa y pertenezca al cliente, libera los asientos ocupados en la ocurrencia correspondiente y cambia el estado de la reserva a CANCELLED.
+*/
+std::string cancelReservation(pqxx::connection& db, const std::string& reservationID,
+                              const std::string& clientID) {
+    pqxx::work tx(db);
+
+    auto cur = tx.exec_params(
+        "SELECT occurrence_id, seat_count FROM reservations "
+        "WHERE reservation_id = $1 AND client_id = $2 AND status = 'ACTIVE' "
+        "FOR UPDATE", reservationID, clientID);
+    if (cur.empty()) return err("la reserva no existe, esta cancelada o no es del cliente");
+
+    auto occurrenceID = cur[0]["occurrence_id"].as<std::string>();
+    int seats = cur[0]["seat_count"].as<int>();
+
+    auto updOcc = tx.exec_params(
+        "UPDATE event_occurrences SET occupied_seats = occupied_seats - $1 "
+        "WHERE occurrence_id = $2 AND occupied_seats >= $1",
+        seats, occurrenceID);
+    if (updOcc.affected_rows() != 1)
+        return err("no se pudieron liberar los asientos de la ocurrencia");
+
+    auto updRes = tx.exec_params(
+        "UPDATE reservations SET status = 'CANCELLED' "
+        "WHERE reservation_id = $1 AND status = 'ACTIVE'",
+        reservationID);
+    if (updRes.affected_rows() != 1)
+        return err("no se pudo cancelar la reserva");
+
+    tx.commit();
+    return "OK";
+}
+
 /* attend
 Parametros de entrada: conexión con la db, solicitud (Request)
 Parametros de salida: Tipo de dato que retorne de la función llamada. Error en caso inválido.
