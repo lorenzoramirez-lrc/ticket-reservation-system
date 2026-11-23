@@ -3,19 +3,23 @@ Archivo: client.py
 Objetivo: Definir los clientes utilizados para simular la carga de trabajo
 """
 
+import csv
+from datetime import datetime, timezone
 import json
 import os
 import random
 import struct
+import time
 from itertools import cycle
 
 import gevent
+from gevent.event import Event
 import zmq.green as zmq
-from locust import User, task, constant_throughput
+from locust import User, task, constant_throughput, events
 from locust.exception import StopUser
 
-# Formato de Request
-FORMAT = "<i32s32s32s32si16s"
+# Formato de Request (compatible con Request struct de C++)
+FORMAT = "<i32s32s32s32si16s64s64s"
 RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_RESERVATION, CHECK_OCCURRENCES = range(8)
 
 # Variables de entorno
@@ -29,17 +33,40 @@ with open(os.path.join(os.path.dirname(__file__), "load_data.json")) as f:
 
 CLIENT_POOL = cycle(DATA["clients"])
 
+# Configuración de escenarios de rendimiento (rendimiento.md)
+PERF_SCENARIOS = {
+    "1": {"clients": 3, "queries": 2, "reserves": 1},
+    "2": {"clients": 5, "queries": 3, "reserves": 2},
+    "3": {"clients": 8, "queries": 4, "reserves": 4},
+    "scenario_1": {"clients": 3, "queries": 2, "reserves": 1},
+    "scenario_2": {"clients": 5, "queries": 3, "reserves": 2},
+    "scenario_3": {"clients": 8, "queries": 4, "reserves": 4},
+}
+
 # Si SCENARIO está definida, ReserveUser ejecuta ese escenario de reserve_scenarios.json
 SCENARIO = os.environ.get("SCENARIO")
 SCENARIO_CONFIG = None
 
 if SCENARIO:
-    with open(os.path.join(os.path.dirname(__file__), "reserve_scenarios.json"), encoding="utf-8") as f:
-        scenarios = json.load(f)
+    scenarios_file = os.path.join(os.path.dirname(__file__), "reserve_scenarios.json")
+    if os.path.exists(scenarios_file):
+        with open(scenarios_file, encoding="utf-8") as f:
+            scenarios = json.load(f)
+        if SCENARIO in scenarios:
+            SCENARIO_CONFIG = scenarios[SCENARIO]
 
-    if SCENARIO not in scenarios:
-        raise ValueError(f"Escenario desconocido: {SCENARIO}. ")
-    SCENARIO_CONFIG = scenarios[SCENARIO]
+RUN_ID = os.environ.get("RUN_ID")
+if not RUN_ID:
+    RUN_ID = f"run_{SCENARIO or '1'}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+RESULTS_DIR = os.environ.get(
+    "RESULTS_DIR",
+    os.path.join(os.path.dirname(__file__), "..", "..", "tests", "performance", "results")
+)
+
+_COORDINATED_START = Event()
+_SPAWNED_USERS = 0
+_EXPECTED_USERS = PERF_SCENARIOS.get(str(SCENARIO), PERF_SCENARIOS["1"])["clients"]
 
 
 # buildRequest
@@ -49,12 +76,13 @@ if SCENARIO:
 # Parametros de salida: bytes (mensaje binario de 152 bytes, con el mismo formato del struct Request de C++)
 # Función: Construye el mensaje de una solicitud empaquetando sus parámetros con el formato binario del struct Request.
 # Cada texto se trunca a (tamaño - 1) bytes para que siempre quede un '\0' al final, y los campos que no se usan quedan vacíos.
-def buildRequest(type, clientID="", eventID="", occurrenceID="", reservationID="", quantity=0, month=""):
+def buildRequest(type, clientID="", eventID="", occurrenceID="", reservationID="", quantity=0, month="", runID="", requestID=""):
     def field(text, size):
         return text.encode()[:size - 1]
 
     return struct.pack(FORMAT, type, field(clientID, 32), field(eventID, 32), field(occurrenceID, 32),
-                       field(reservationID, 32), quantity, field(month, 16))
+                       field(reservationID, 32), quantity, field(month, 16),
+                       field(runID, 64), field(requestID, 64))
 
 
 # Clase abstracta BaseClient
@@ -398,3 +426,168 @@ class CancelUser(BaseClient):
 
         res = random.choice(self.reservations)
         self._cancel(res)
+
+
+# ==============================================================================
+# PerformanceUser: Cliente para evaluación de rendimiento según rendimiento.md
+# ==============================================================================
+
+@events.init.add_listener
+def on_locust_init(environment, **kwargs):
+    """Inicializa metadatos de la corrida de rendimiento para el analizador."""
+    if SCENARIO in PERF_SCENARIOS or os.environ.get("RUN_ID"):
+        run_dir = os.path.join(RESULTS_DIR, RUN_ID)
+        os.makedirs(run_dir, exist_ok=True)
+        s_cfg = PERF_SCENARIOS.get(str(SCENARIO), PERF_SCENARIOS["1"])
+        metadata = {
+            "run_id": RUN_ID,
+            "scenario": f"scenario_{SCENARIO}" if str(SCENARIO) in ["1", "2", "3"] else str(SCENARIO),
+            "clients": s_cfg["clients"],
+            "queries_per_cycle": s_cfg["queries"],
+            "reserves_per_cycle": s_cfg["reserves"],
+            "manager_addr": MANAGER_ADDR,
+            "timestamp_start": datetime.now(timezone.utc).isoformat(),
+            "runner": "locust"
+        }
+        with open(os.path.join(run_dir, "metadata.json"), "w", encoding="utf-8") as f:
+            json.dump(metadata, f, indent=2)
+
+
+class PerformanceUser(User):
+    """
+    Cliente de rendimiento de Locust para evaluar los escenarios 1, 2 y 3.
+    - Ejecuta de forma continua sin pausas artificiales (wait_time nulo).
+    - Medición de latencia con time.perf_counter() de alta precisión.
+    - Genera CSVs individuales (client_<clientID>.csv) procesables por analyze_metrics.py.
+    """
+    wait_time = None
+
+    def on_start(self):
+        global _SPAWNED_USERS, _COORDINATED_START, _EXPECTED_USERS
+        self.ctx = zmq.Context()
+        self.sock = self.ctx.socket(zmq.REQ)
+        self.sock.setsockopt(zmq.LINGER, 0)
+        self.sock.setsockopt(zmq.RCVTIMEO, 5000)
+        self.sock.setsockopt(zmq.SNDTIMEO, 5000)
+        self.sock.connect(MANAGER_ADDR)
+
+        self.clientID = next(CLIENT_POOL)
+        self.seq_num = 0
+        self.records = []
+        self.scenario_cfg = PERF_SCENARIOS.get(str(SCENARIO), PERF_SCENARIOS["1"])
+
+        # Coordinación de inicio simultáneo entre clientes
+        _SPAWNED_USERS += 1
+        if _SPAWNED_USERS >= _EXPECTED_USERS:
+            _COORDINATED_START.set()
+        else:
+            _COORDINATED_START.wait(timeout=10)
+
+    def _execute_req(self, op_code, op_name, event_id="", occ_id="", qty=0, month=""):
+        self.seq_num += 1
+        req_id = f"{RUN_ID}_{self.clientID}_{self.seq_num:06d}"
+
+        data = buildRequest(
+            op_code,
+            clientID=self.clientID,
+            eventID=event_id,
+            occurrenceID=occ_id,
+            quantity=qty,
+            month=month,
+            runID=RUN_ID,
+            requestID=req_id
+        )
+
+        start_wall = datetime.now(timezone.utc).isoformat()
+        t0 = time.perf_counter()
+        status = "SYSTEM_ERROR"
+        error_msg = ""
+        resp_bytes = b""
+
+        try:
+            self.sock.send(data)
+            resp_bytes = self.sock.recv()
+            t1 = time.perf_counter()
+            elapsed_ms = (t1 - t0) * 1000.0
+
+            text = resp_bytes.decode("utf-8", errors="replace").strip()
+            if text.startswith("OK"):
+                status = "SUCCESS"
+            elif any(ind in text.lower() for ind in ["insuficientes", "sin cupo", "invalida", "no existe"]) or text.startswith("ERROR:"):
+                status = "BUSINESS_ERROR"
+                error_msg = text
+            else:
+                status = "SYSTEM_ERROR"
+                error_msg = text
+
+        except zmq.Again:
+            t1 = time.perf_counter()
+            elapsed_ms = (t1 - t0) * 1000.0
+            status = "TIMEOUT"
+            error_msg = "ZeroMQ REQ receive timeout"
+            self.sock.close()
+            self.sock = self.ctx.socket(zmq.REQ)
+            self.sock.setsockopt(zmq.LINGER, 0)
+            self.sock.setsockopt(zmq.RCVTIMEO, 5000)
+            self.sock.setsockopt(zmq.SNDTIMEO, 5000)
+            self.sock.connect(MANAGER_ADDR)
+        except Exception as e:
+            t1 = time.perf_counter()
+            elapsed_ms = (t1 - t0) * 1000.0
+            status = "SYSTEM_ERROR"
+            error_msg = str(e)
+
+        # Disparar evento a Locust para seguimiento en consola/UI
+        self.environment.events.request.fire(
+            request_type="ZeroMQ",
+            name=op_name,
+            response_time=elapsed_ms,
+            response_length=len(resp_bytes),
+            exception=None if status == "SUCCESS" else Exception(error_msg or status),
+            context={"status": status}
+        )
+
+        # Guardar en buffer para CSV final
+        self.records.append({
+            "run_id": RUN_ID,
+            "client_id": self.clientID,
+            "request_id": req_id,
+            "operation_type": op_name,
+            "start_time": start_wall,
+            "response_time_ms": elapsed_ms,
+            "status": status,
+            "error_message": error_msg
+        })
+
+    @task
+    def cycle(self):
+        """Ejecuta un ciclo completo de consultas y reservas secuenciales."""
+        # 1. Consultas del ciclo
+        for _ in range(self.scenario_cfg["queries"]):
+            month = random.choice(DATA["months"])
+            self._execute_req(QUERY, "CONSULTA", month=month)
+
+        # 2. Reservas del ciclo
+        for _ in range(self.scenario_cfg["reserves"]):
+            event = random.choice(DATA["events"])
+            occ_id = random.choice(event["occurrences"])
+            qty = random.randint(1, 4)
+            self._execute_req(RESERVE, "RESERVA", event_id=event["eventID"], occ_id=occ_id, qty=qty)
+
+    def on_stop(self):
+        # Escritura segura a disco fuera de la medición de latencia
+        run_dir = os.path.join(RESULTS_DIR, RUN_ID)
+        os.makedirs(run_dir, exist_ok=True)
+        csv_file = os.path.join(run_dir, f"client_{self.clientID}.csv")
+        fieldnames = [
+            "run_id", "client_id", "request_id", "operation_type",
+            "start_time", "response_time_ms", "status", "error_message"
+        ]
+        with open(csv_file, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(self.records)
+
+        self.sock.close()
+        self.ctx.term()
+
