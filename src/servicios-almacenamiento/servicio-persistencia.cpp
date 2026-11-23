@@ -4,6 +4,8 @@ Objetivo: Recibir las solicitudes desde el servicio RMC y realizar las distintas
 Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, modifyQuantity, modifyOcurrence, attend
 */
 
+#include <vector>
+#include <stdexcept>
 #include <string>
 #include <cstring>
 #include <iostream>
@@ -118,11 +120,12 @@ std::string reserveSeats(pqxx::connection& db, const std::string& clientID,
 
     auto ins = tx.exec_params(
         "INSERT INTO reservations(reservation_id, occurrence_id, client_id, seat_count) "
-        "VALUES (gen_random_uuid()::text, $1, $2, $3) RETURNING reservation_id", occurrenceID, clientID, quantity);
+        "VALUES (substr(replace(gen_random_uuid()::text, '-', ''), 1, 16), $1, $2, $3) RETURNING reservation_id",
+        occurrenceID, clientID, quantity);
     auto id = ins[0]["reservation_id"].as<std::string>();
 
     tx.commit();
-    return "OK reservationID=" + id;
+    return "OK:" + id;
 }
 
 
@@ -233,6 +236,21 @@ std::string cancelReservation(pqxx::connection& db, const std::string& reservati
     return "OK";
 }
 
+/* parseMonth
+Parametros de entrada: mes (String), como número ("10") o como nombre en minúsculas ("octubre")
+Parametros de salida: número del mes (int, de 1 a 12). Lanza una excepción si el texto no es un mes válido.
+*/
+static int parseMonth(const std::string& m) {
+    static const std::vector<std::string> names = {"enero", "febrero", "marzo", "abril", "mayo", "junio",
+                                                   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"};
+    for (size_t i = 0; i < names.size(); i++)
+        if (m == names[i]) return static_cast<int>(i) + 1;
+
+    int month = std::stoi(m);
+    if (month < 1 || month > 12) throw std::invalid_argument("mes fuera de rango");
+    return month;
+}
+
 /* attend
 Parametros de entrada: conexión con la db, solicitud (Request)
 Parametros de salida: Tipo de dato que retorne de la función llamada. Error en caso inválido.
@@ -258,7 +276,7 @@ std::string attend(pqxx::connection& db, const Request& q) {
             return cancelReservation(db, (q.reservationID), (q.clientID));
         case QUERY: {
             int month;
-            try { month = std::stoi((q.month)); }
+            try { month = parseMonth(q.month); }
             catch (...) { return err("mes invalido"); }
             return queryEvents(db, month);
         }

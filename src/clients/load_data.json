@@ -1,0 +1,2428 @@
+{
+  "clients": [
+    "C001",
+    "C002",
+    "C003",
+    "C004",
+    "C005",
+    "C006",
+    "C007",
+    "C008"
+  ],
+  "events": [
+    {
+      "eventID": "E1",
+      "month": "enero",
+      "occurrences": [
+        "E1-1",
+        "E1-2"
+      ]
+    },
+    {
+      "eventID": "E2",
+      "month": "enero",
+      "occurrences": [
+        "E2-1",
+        "E2-2"
+      ]
+    },
+    {
+      "eventID": "E3",
+      "month": "enero",
+      "occurrences": [
+        "E3-1",
+        "E3-2"
+      ]
+    },
+    {
+      "eventID": "E4",
+      "month": "enero",
+      "occurrences": [
+        "E4-1",
+        "E4-2"
+      ]
+    },
+    {
+      "eventID": "E5",
+      "month": "enero",
+      "occurrences": [
+        "E5-1",
+        "E5-2"
+      ]
+    },
+    {
+      "eventID": "E6",
+      "month": "enero",
+      "occurrences": [
+        "E6-1",
+        "E6-2"
+      ]
+    },
+    {
+      "eventID": "E7",
+      "month": "enero",
+      "occurrences": [
+        "E7-1",
+        "E7-2"
+      ]
+    },
+    {
+      "eventID": "E8",
+      "month": "enero",
+      "occurrences": [
+        "E8-1",
+        "E8-2"
+      ]
+    },
+    {
+      "eventID": "E9",
+      "month": "enero",
+      "occurrences": [
+        "E9-1",
+        "E9-2"
+      ]
+    },
+    {
+      "eventID": "E10",
+      "month": "enero",
+      "occurrences": [
+        "E10-1",
+        "E10-2"
+      ]
+    },
+    {
+      "eventID": "E11",
+      "month": "enero",
+      "occurrences": [
+        "E11-1",
+        "E11-2"
+      ]
+    },
+    {
+      "eventID": "E12",
+      "month": "enero",
+      "occurrences": [
+        "E12-1",
+        "E12-2"
+      ]
+    },
+    {
+      "eventID": "E13",
+      "month": "enero",
+      "occurrences": [
+        "E13-1",
+        "E13-2"
+      ]
+    },
+    {
+      "eventID": "E14",
+      "month": "enero",
+      "occurrences": [
+        "E14-1",
+        "E14-2"
+      ]
+    },
+    {
+      "eventID": "E15",
+      "month": "enero",
+      "occurrences": [
+        "E15-1",
+        "E15-2"
+      ]
+    },
+    {
+      "eventID": "E16",
+      "month": "enero",
+      "occurrences": [
+        "E16-1",
+        "E16-2"
+      ]
+    },
+    {
+      "eventID": "E17",
+      "month": "enero",
+      "occurrences": [
+        "E17-1",
+        "E17-2"
+      ]
+    },
+    {
+      "eventID": "E18",
+      "month": "enero",
+      "occurrences": [
+        "E18-1",
+        "E18-2"
+      ]
+    },
+    {
+      "eventID": "E19",
+      "month": "enero",
+      "occurrences": [
+        "E19-1",
+        "E19-2"
+      ]
+    },
+    {
+      "eventID": "E20",
+      "month": "enero",
+      "occurrences": [
+        "E20-1",
+        "E20-2"
+      ]
+    },
+    {
+      "eventID": "E21",
+      "month": "enero",
+      "occurrences": [
+        "E21-1",
+        "E21-2"
+      ]
+    },
+    {
+      "eventID": "E22",
+      "month": "enero",
+      "occurrences": [
+        "E22-1",
+        "E22-2"
+      ]
+    },
+    {
+      "eventID": "E23",
+      "month": "enero",
+      "occurrences": [
+        "E23-1",
+        "E23-2"
+      ]
+    },
+    {
+      "eventID": "E24",
+      "month": "enero",
+      "occurrences": [
+        "E24-1",
+        "E24-2"
+      ]
+    },
+    {
+      "eventID": "E25",
+      "month": "enero",
+      "occurrences": [
+        "E25-1",
+        "E25-2"
+      ]
+    },
+    {
+      "eventID": "E26",
+      "month": "febrero",
+      "occurrences": [
+        "E26-1",
+        "E26-2"
+      ]
+    },
+    {
+      "eventID": "E27",
+      "month": "febrero",
+      "occurrences": [
+        "E27-1",
+        "E27-2"
+      ]
+    },
+    {
+      "eventID": "E28",
+      "month": "febrero",
+      "occurrences": [
+        "E28-1",
+        "E28-2"
+      ]
+    },
+    {
+      "eventID": "E29",
+      "month": "febrero",
+      "occurrences": [
+        "E29-1",
+        "E29-2"
+      ]
+    },
+    {
+      "eventID": "E30",
+      "month": "febrero",
+      "occurrences": [
+        "E30-1",
+        "E30-2"
+      ]
+    },
+    {
+      "eventID": "E31",
+      "month": "febrero",
+      "occurrences": [
+        "E31-1",
+        "E31-2"
+      ]
+    },
+    {
+      "eventID": "E32",
+      "month": "febrero",
+      "occurrences": [
+        "E32-1",
+        "E32-2"
+      ]
+    },
+    {
+      "eventID": "E33",
+      "month": "febrero",
+      "occurrences": [
+        "E33-1",
+        "E33-2"
+      ]
+    },
+    {
+      "eventID": "E34",
+      "month": "febrero",
+      "occurrences": [
+        "E34-1",
+        "E34-2"
+      ]
+    },
+    {
+      "eventID": "E35",
+      "month": "febrero",
+      "occurrences": [
+        "E35-1",
+        "E35-2"
+      ]
+    },
+    {
+      "eventID": "E36",
+      "month": "febrero",
+      "occurrences": [
+        "E36-1",
+        "E36-2"
+      ]
+    },
+    {
+      "eventID": "E37",
+      "month": "febrero",
+      "occurrences": [
+        "E37-1",
+        "E37-2"
+      ]
+    },
+    {
+      "eventID": "E38",
+      "month": "febrero",
+      "occurrences": [
+        "E38-1",
+        "E38-2"
+      ]
+    },
+    {
+      "eventID": "E39",
+      "month": "febrero",
+      "occurrences": [
+        "E39-1",
+        "E39-2"
+      ]
+    },
+    {
+      "eventID": "E40",
+      "month": "febrero",
+      "occurrences": [
+        "E40-1",
+        "E40-2"
+      ]
+    },
+    {
+      "eventID": "E41",
+      "month": "febrero",
+      "occurrences": [
+        "E41-1",
+        "E41-2"
+      ]
+    },
+    {
+      "eventID": "E42",
+      "month": "febrero",
+      "occurrences": [
+        "E42-1",
+        "E42-2"
+      ]
+    },
+    {
+      "eventID": "E43",
+      "month": "febrero",
+      "occurrences": [
+        "E43-1",
+        "E43-2"
+      ]
+    },
+    {
+      "eventID": "E44",
+      "month": "febrero",
+      "occurrences": [
+        "E44-1",
+        "E44-2"
+      ]
+    },
+    {
+      "eventID": "E45",
+      "month": "febrero",
+      "occurrences": [
+        "E45-1",
+        "E45-2"
+      ]
+    },
+    {
+      "eventID": "E46",
+      "month": "febrero",
+      "occurrences": [
+        "E46-1",
+        "E46-2"
+      ]
+    },
+    {
+      "eventID": "E47",
+      "month": "febrero",
+      "occurrences": [
+        "E47-1",
+        "E47-2"
+      ]
+    },
+    {
+      "eventID": "E48",
+      "month": "febrero",
+      "occurrences": [
+        "E48-1",
+        "E48-2"
+      ]
+    },
+    {
+      "eventID": "E49",
+      "month": "febrero",
+      "occurrences": [
+        "E49-1",
+        "E49-2"
+      ]
+    },
+    {
+      "eventID": "E50",
+      "month": "febrero",
+      "occurrences": [
+        "E50-1",
+        "E50-2"
+      ]
+    },
+    {
+      "eventID": "E51",
+      "month": "marzo",
+      "occurrences": [
+        "E51-1",
+        "E51-2"
+      ]
+    },
+    {
+      "eventID": "E52",
+      "month": "marzo",
+      "occurrences": [
+        "E52-1",
+        "E52-2"
+      ]
+    },
+    {
+      "eventID": "E53",
+      "month": "marzo",
+      "occurrences": [
+        "E53-1",
+        "E53-2"
+      ]
+    },
+    {
+      "eventID": "E54",
+      "month": "marzo",
+      "occurrences": [
+        "E54-1",
+        "E54-2"
+      ]
+    },
+    {
+      "eventID": "E55",
+      "month": "marzo",
+      "occurrences": [
+        "E55-1",
+        "E55-2"
+      ]
+    },
+    {
+      "eventID": "E56",
+      "month": "marzo",
+      "occurrences": [
+        "E56-1",
+        "E56-2"
+      ]
+    },
+    {
+      "eventID": "E57",
+      "month": "marzo",
+      "occurrences": [
+        "E57-1",
+        "E57-2"
+      ]
+    },
+    {
+      "eventID": "E58",
+      "month": "marzo",
+      "occurrences": [
+        "E58-1",
+        "E58-2"
+      ]
+    },
+    {
+      "eventID": "E59",
+      "month": "marzo",
+      "occurrences": [
+        "E59-1",
+        "E59-2"
+      ]
+    },
+    {
+      "eventID": "E60",
+      "month": "marzo",
+      "occurrences": [
+        "E60-1",
+        "E60-2"
+      ]
+    },
+    {
+      "eventID": "E61",
+      "month": "marzo",
+      "occurrences": [
+        "E61-1",
+        "E61-2"
+      ]
+    },
+    {
+      "eventID": "E62",
+      "month": "marzo",
+      "occurrences": [
+        "E62-1",
+        "E62-2"
+      ]
+    },
+    {
+      "eventID": "E63",
+      "month": "marzo",
+      "occurrences": [
+        "E63-1",
+        "E63-2"
+      ]
+    },
+    {
+      "eventID": "E64",
+      "month": "marzo",
+      "occurrences": [
+        "E64-1",
+        "E64-2"
+      ]
+    },
+    {
+      "eventID": "E65",
+      "month": "marzo",
+      "occurrences": [
+        "E65-1",
+        "E65-2"
+      ]
+    },
+    {
+      "eventID": "E66",
+      "month": "marzo",
+      "occurrences": [
+        "E66-1",
+        "E66-2"
+      ]
+    },
+    {
+      "eventID": "E67",
+      "month": "marzo",
+      "occurrences": [
+        "E67-1",
+        "E67-2"
+      ]
+    },
+    {
+      "eventID": "E68",
+      "month": "marzo",
+      "occurrences": [
+        "E68-1",
+        "E68-2"
+      ]
+    },
+    {
+      "eventID": "E69",
+      "month": "marzo",
+      "occurrences": [
+        "E69-1",
+        "E69-2"
+      ]
+    },
+    {
+      "eventID": "E70",
+      "month": "marzo",
+      "occurrences": [
+        "E70-1",
+        "E70-2"
+      ]
+    },
+    {
+      "eventID": "E71",
+      "month": "marzo",
+      "occurrences": [
+        "E71-1",
+        "E71-2"
+      ]
+    },
+    {
+      "eventID": "E72",
+      "month": "marzo",
+      "occurrences": [
+        "E72-1",
+        "E72-2"
+      ]
+    },
+    {
+      "eventID": "E73",
+      "month": "marzo",
+      "occurrences": [
+        "E73-1",
+        "E73-2"
+      ]
+    },
+    {
+      "eventID": "E74",
+      "month": "marzo",
+      "occurrences": [
+        "E74-1",
+        "E74-2"
+      ]
+    },
+    {
+      "eventID": "E75",
+      "month": "marzo",
+      "occurrences": [
+        "E75-1",
+        "E75-2"
+      ]
+    },
+    {
+      "eventID": "E76",
+      "month": "abril",
+      "occurrences": [
+        "E76-1",
+        "E76-2"
+      ]
+    },
+    {
+      "eventID": "E77",
+      "month": "abril",
+      "occurrences": [
+        "E77-1",
+        "E77-2"
+      ]
+    },
+    {
+      "eventID": "E78",
+      "month": "abril",
+      "occurrences": [
+        "E78-1",
+        "E78-2"
+      ]
+    },
+    {
+      "eventID": "E79",
+      "month": "abril",
+      "occurrences": [
+        "E79-1",
+        "E79-2"
+      ]
+    },
+    {
+      "eventID": "E80",
+      "month": "abril",
+      "occurrences": [
+        "E80-1",
+        "E80-2"
+      ]
+    },
+    {
+      "eventID": "E81",
+      "month": "abril",
+      "occurrences": [
+        "E81-1",
+        "E81-2"
+      ]
+    },
+    {
+      "eventID": "E82",
+      "month": "abril",
+      "occurrences": [
+        "E82-1",
+        "E82-2"
+      ]
+    },
+    {
+      "eventID": "E83",
+      "month": "abril",
+      "occurrences": [
+        "E83-1",
+        "E83-2"
+      ]
+    },
+    {
+      "eventID": "E84",
+      "month": "abril",
+      "occurrences": [
+        "E84-1",
+        "E84-2"
+      ]
+    },
+    {
+      "eventID": "E85",
+      "month": "abril",
+      "occurrences": [
+        "E85-1",
+        "E85-2"
+      ]
+    },
+    {
+      "eventID": "E86",
+      "month": "abril",
+      "occurrences": [
+        "E86-1",
+        "E86-2"
+      ]
+    },
+    {
+      "eventID": "E87",
+      "month": "abril",
+      "occurrences": [
+        "E87-1",
+        "E87-2"
+      ]
+    },
+    {
+      "eventID": "E88",
+      "month": "abril",
+      "occurrences": [
+        "E88-1",
+        "E88-2"
+      ]
+    },
+    {
+      "eventID": "E89",
+      "month": "abril",
+      "occurrences": [
+        "E89-1",
+        "E89-2"
+      ]
+    },
+    {
+      "eventID": "E90",
+      "month": "abril",
+      "occurrences": [
+        "E90-1",
+        "E90-2"
+      ]
+    },
+    {
+      "eventID": "E91",
+      "month": "abril",
+      "occurrences": [
+        "E91-1",
+        "E91-2"
+      ]
+    },
+    {
+      "eventID": "E92",
+      "month": "abril",
+      "occurrences": [
+        "E92-1",
+        "E92-2"
+      ]
+    },
+    {
+      "eventID": "E93",
+      "month": "abril",
+      "occurrences": [
+        "E93-1",
+        "E93-2"
+      ]
+    },
+    {
+      "eventID": "E94",
+      "month": "abril",
+      "occurrences": [
+        "E94-1",
+        "E94-2"
+      ]
+    },
+    {
+      "eventID": "E95",
+      "month": "abril",
+      "occurrences": [
+        "E95-1",
+        "E95-2"
+      ]
+    },
+    {
+      "eventID": "E96",
+      "month": "abril",
+      "occurrences": [
+        "E96-1",
+        "E96-2"
+      ]
+    },
+    {
+      "eventID": "E97",
+      "month": "abril",
+      "occurrences": [
+        "E97-1",
+        "E97-2"
+      ]
+    },
+    {
+      "eventID": "E98",
+      "month": "abril",
+      "occurrences": [
+        "E98-1",
+        "E98-2"
+      ]
+    },
+    {
+      "eventID": "E99",
+      "month": "abril",
+      "occurrences": [
+        "E99-1",
+        "E99-2"
+      ]
+    },
+    {
+      "eventID": "E100",
+      "month": "abril",
+      "occurrences": [
+        "E100-1",
+        "E100-2"
+      ]
+    },
+    {
+      "eventID": "E101",
+      "month": "mayo",
+      "occurrences": [
+        "E101-1",
+        "E101-2"
+      ]
+    },
+    {
+      "eventID": "E102",
+      "month": "mayo",
+      "occurrences": [
+        "E102-1",
+        "E102-2"
+      ]
+    },
+    {
+      "eventID": "E103",
+      "month": "mayo",
+      "occurrences": [
+        "E103-1",
+        "E103-2"
+      ]
+    },
+    {
+      "eventID": "E104",
+      "month": "mayo",
+      "occurrences": [
+        "E104-1",
+        "E104-2"
+      ]
+    },
+    {
+      "eventID": "E105",
+      "month": "mayo",
+      "occurrences": [
+        "E105-1",
+        "E105-2"
+      ]
+    },
+    {
+      "eventID": "E106",
+      "month": "mayo",
+      "occurrences": [
+        "E106-1",
+        "E106-2"
+      ]
+    },
+    {
+      "eventID": "E107",
+      "month": "mayo",
+      "occurrences": [
+        "E107-1",
+        "E107-2"
+      ]
+    },
+    {
+      "eventID": "E108",
+      "month": "mayo",
+      "occurrences": [
+        "E108-1",
+        "E108-2"
+      ]
+    },
+    {
+      "eventID": "E109",
+      "month": "mayo",
+      "occurrences": [
+        "E109-1",
+        "E109-2"
+      ]
+    },
+    {
+      "eventID": "E110",
+      "month": "mayo",
+      "occurrences": [
+        "E110-1",
+        "E110-2"
+      ]
+    },
+    {
+      "eventID": "E111",
+      "month": "mayo",
+      "occurrences": [
+        "E111-1",
+        "E111-2"
+      ]
+    },
+    {
+      "eventID": "E112",
+      "month": "mayo",
+      "occurrences": [
+        "E112-1",
+        "E112-2"
+      ]
+    },
+    {
+      "eventID": "E113",
+      "month": "mayo",
+      "occurrences": [
+        "E113-1",
+        "E113-2"
+      ]
+    },
+    {
+      "eventID": "E114",
+      "month": "mayo",
+      "occurrences": [
+        "E114-1",
+        "E114-2"
+      ]
+    },
+    {
+      "eventID": "E115",
+      "month": "mayo",
+      "occurrences": [
+        "E115-1",
+        "E115-2"
+      ]
+    },
+    {
+      "eventID": "E116",
+      "month": "mayo",
+      "occurrences": [
+        "E116-1",
+        "E116-2"
+      ]
+    },
+    {
+      "eventID": "E117",
+      "month": "mayo",
+      "occurrences": [
+        "E117-1",
+        "E117-2"
+      ]
+    },
+    {
+      "eventID": "E118",
+      "month": "mayo",
+      "occurrences": [
+        "E118-1",
+        "E118-2"
+      ]
+    },
+    {
+      "eventID": "E119",
+      "month": "mayo",
+      "occurrences": [
+        "E119-1",
+        "E119-2"
+      ]
+    },
+    {
+      "eventID": "E120",
+      "month": "mayo",
+      "occurrences": [
+        "E120-1",
+        "E120-2"
+      ]
+    },
+    {
+      "eventID": "E121",
+      "month": "mayo",
+      "occurrences": [
+        "E121-1",
+        "E121-2"
+      ]
+    },
+    {
+      "eventID": "E122",
+      "month": "mayo",
+      "occurrences": [
+        "E122-1",
+        "E122-2"
+      ]
+    },
+    {
+      "eventID": "E123",
+      "month": "mayo",
+      "occurrences": [
+        "E123-1",
+        "E123-2"
+      ]
+    },
+    {
+      "eventID": "E124",
+      "month": "mayo",
+      "occurrences": [
+        "E124-1",
+        "E124-2"
+      ]
+    },
+    {
+      "eventID": "E125",
+      "month": "mayo",
+      "occurrences": [
+        "E125-1",
+        "E125-2"
+      ]
+    },
+    {
+      "eventID": "E126",
+      "month": "junio",
+      "occurrences": [
+        "E126-1",
+        "E126-2"
+      ]
+    },
+    {
+      "eventID": "E127",
+      "month": "junio",
+      "occurrences": [
+        "E127-1",
+        "E127-2"
+      ]
+    },
+    {
+      "eventID": "E128",
+      "month": "junio",
+      "occurrences": [
+        "E128-1",
+        "E128-2"
+      ]
+    },
+    {
+      "eventID": "E129",
+      "month": "junio",
+      "occurrences": [
+        "E129-1",
+        "E129-2"
+      ]
+    },
+    {
+      "eventID": "E130",
+      "month": "junio",
+      "occurrences": [
+        "E130-1",
+        "E130-2"
+      ]
+    },
+    {
+      "eventID": "E131",
+      "month": "junio",
+      "occurrences": [
+        "E131-1",
+        "E131-2"
+      ]
+    },
+    {
+      "eventID": "E132",
+      "month": "junio",
+      "occurrences": [
+        "E132-1",
+        "E132-2"
+      ]
+    },
+    {
+      "eventID": "E133",
+      "month": "junio",
+      "occurrences": [
+        "E133-1",
+        "E133-2"
+      ]
+    },
+    {
+      "eventID": "E134",
+      "month": "junio",
+      "occurrences": [
+        "E134-1",
+        "E134-2"
+      ]
+    },
+    {
+      "eventID": "E135",
+      "month": "junio",
+      "occurrences": [
+        "E135-1",
+        "E135-2"
+      ]
+    },
+    {
+      "eventID": "E136",
+      "month": "junio",
+      "occurrences": [
+        "E136-1",
+        "E136-2"
+      ]
+    },
+    {
+      "eventID": "E137",
+      "month": "junio",
+      "occurrences": [
+        "E137-1",
+        "E137-2"
+      ]
+    },
+    {
+      "eventID": "E138",
+      "month": "junio",
+      "occurrences": [
+        "E138-1",
+        "E138-2"
+      ]
+    },
+    {
+      "eventID": "E139",
+      "month": "junio",
+      "occurrences": [
+        "E139-1",
+        "E139-2"
+      ]
+    },
+    {
+      "eventID": "E140",
+      "month": "junio",
+      "occurrences": [
+        "E140-1",
+        "E140-2"
+      ]
+    },
+    {
+      "eventID": "E141",
+      "month": "junio",
+      "occurrences": [
+        "E141-1",
+        "E141-2"
+      ]
+    },
+    {
+      "eventID": "E142",
+      "month": "junio",
+      "occurrences": [
+        "E142-1",
+        "E142-2"
+      ]
+    },
+    {
+      "eventID": "E143",
+      "month": "junio",
+      "occurrences": [
+        "E143-1",
+        "E143-2"
+      ]
+    },
+    {
+      "eventID": "E144",
+      "month": "junio",
+      "occurrences": [
+        "E144-1",
+        "E144-2"
+      ]
+    },
+    {
+      "eventID": "E145",
+      "month": "junio",
+      "occurrences": [
+        "E145-1",
+        "E145-2"
+      ]
+    },
+    {
+      "eventID": "E146",
+      "month": "junio",
+      "occurrences": [
+        "E146-1",
+        "E146-2"
+      ]
+    },
+    {
+      "eventID": "E147",
+      "month": "junio",
+      "occurrences": [
+        "E147-1",
+        "E147-2"
+      ]
+    },
+    {
+      "eventID": "E148",
+      "month": "junio",
+      "occurrences": [
+        "E148-1",
+        "E148-2"
+      ]
+    },
+    {
+      "eventID": "E149",
+      "month": "junio",
+      "occurrences": [
+        "E149-1",
+        "E149-2"
+      ]
+    },
+    {
+      "eventID": "E150",
+      "month": "junio",
+      "occurrences": [
+        "E150-1",
+        "E150-2"
+      ]
+    },
+    {
+      "eventID": "E151",
+      "month": "julio",
+      "occurrences": [
+        "E151-1",
+        "E151-2"
+      ]
+    },
+    {
+      "eventID": "E152",
+      "month": "julio",
+      "occurrences": [
+        "E152-1",
+        "E152-2"
+      ]
+    },
+    {
+      "eventID": "E153",
+      "month": "julio",
+      "occurrences": [
+        "E153-1",
+        "E153-2"
+      ]
+    },
+    {
+      "eventID": "E154",
+      "month": "julio",
+      "occurrences": [
+        "E154-1",
+        "E154-2"
+      ]
+    },
+    {
+      "eventID": "E155",
+      "month": "julio",
+      "occurrences": [
+        "E155-1",
+        "E155-2"
+      ]
+    },
+    {
+      "eventID": "E156",
+      "month": "julio",
+      "occurrences": [
+        "E156-1",
+        "E156-2"
+      ]
+    },
+    {
+      "eventID": "E157",
+      "month": "julio",
+      "occurrences": [
+        "E157-1",
+        "E157-2"
+      ]
+    },
+    {
+      "eventID": "E158",
+      "month": "julio",
+      "occurrences": [
+        "E158-1",
+        "E158-2"
+      ]
+    },
+    {
+      "eventID": "E159",
+      "month": "julio",
+      "occurrences": [
+        "E159-1",
+        "E159-2"
+      ]
+    },
+    {
+      "eventID": "E160",
+      "month": "julio",
+      "occurrences": [
+        "E160-1",
+        "E160-2"
+      ]
+    },
+    {
+      "eventID": "E161",
+      "month": "julio",
+      "occurrences": [
+        "E161-1",
+        "E161-2"
+      ]
+    },
+    {
+      "eventID": "E162",
+      "month": "julio",
+      "occurrences": [
+        "E162-1",
+        "E162-2"
+      ]
+    },
+    {
+      "eventID": "E163",
+      "month": "julio",
+      "occurrences": [
+        "E163-1",
+        "E163-2"
+      ]
+    },
+    {
+      "eventID": "E164",
+      "month": "julio",
+      "occurrences": [
+        "E164-1",
+        "E164-2"
+      ]
+    },
+    {
+      "eventID": "E165",
+      "month": "julio",
+      "occurrences": [
+        "E165-1",
+        "E165-2"
+      ]
+    },
+    {
+      "eventID": "E166",
+      "month": "julio",
+      "occurrences": [
+        "E166-1",
+        "E166-2"
+      ]
+    },
+    {
+      "eventID": "E167",
+      "month": "julio",
+      "occurrences": [
+        "E167-1",
+        "E167-2"
+      ]
+    },
+    {
+      "eventID": "E168",
+      "month": "julio",
+      "occurrences": [
+        "E168-1",
+        "E168-2"
+      ]
+    },
+    {
+      "eventID": "E169",
+      "month": "julio",
+      "occurrences": [
+        "E169-1",
+        "E169-2"
+      ]
+    },
+    {
+      "eventID": "E170",
+      "month": "julio",
+      "occurrences": [
+        "E170-1",
+        "E170-2"
+      ]
+    },
+    {
+      "eventID": "E171",
+      "month": "julio",
+      "occurrences": [
+        "E171-1",
+        "E171-2"
+      ]
+    },
+    {
+      "eventID": "E172",
+      "month": "julio",
+      "occurrences": [
+        "E172-1",
+        "E172-2"
+      ]
+    },
+    {
+      "eventID": "E173",
+      "month": "julio",
+      "occurrences": [
+        "E173-1",
+        "E173-2"
+      ]
+    },
+    {
+      "eventID": "E174",
+      "month": "julio",
+      "occurrences": [
+        "E174-1",
+        "E174-2"
+      ]
+    },
+    {
+      "eventID": "E175",
+      "month": "julio",
+      "occurrences": [
+        "E175-1",
+        "E175-2"
+      ]
+    },
+    {
+      "eventID": "E176",
+      "month": "agosto",
+      "occurrences": [
+        "E176-1",
+        "E176-2"
+      ]
+    },
+    {
+      "eventID": "E177",
+      "month": "agosto",
+      "occurrences": [
+        "E177-1",
+        "E177-2"
+      ]
+    },
+    {
+      "eventID": "E178",
+      "month": "agosto",
+      "occurrences": [
+        "E178-1",
+        "E178-2"
+      ]
+    },
+    {
+      "eventID": "E179",
+      "month": "agosto",
+      "occurrences": [
+        "E179-1",
+        "E179-2"
+      ]
+    },
+    {
+      "eventID": "E180",
+      "month": "agosto",
+      "occurrences": [
+        "E180-1",
+        "E180-2"
+      ]
+    },
+    {
+      "eventID": "E181",
+      "month": "agosto",
+      "occurrences": [
+        "E181-1",
+        "E181-2"
+      ]
+    },
+    {
+      "eventID": "E182",
+      "month": "agosto",
+      "occurrences": [
+        "E182-1",
+        "E182-2"
+      ]
+    },
+    {
+      "eventID": "E183",
+      "month": "agosto",
+      "occurrences": [
+        "E183-1",
+        "E183-2"
+      ]
+    },
+    {
+      "eventID": "E184",
+      "month": "agosto",
+      "occurrences": [
+        "E184-1",
+        "E184-2"
+      ]
+    },
+    {
+      "eventID": "E185",
+      "month": "agosto",
+      "occurrences": [
+        "E185-1",
+        "E185-2"
+      ]
+    },
+    {
+      "eventID": "E186",
+      "month": "agosto",
+      "occurrences": [
+        "E186-1",
+        "E186-2"
+      ]
+    },
+    {
+      "eventID": "E187",
+      "month": "agosto",
+      "occurrences": [
+        "E187-1",
+        "E187-2"
+      ]
+    },
+    {
+      "eventID": "E188",
+      "month": "agosto",
+      "occurrences": [
+        "E188-1",
+        "E188-2"
+      ]
+    },
+    {
+      "eventID": "E189",
+      "month": "agosto",
+      "occurrences": [
+        "E189-1",
+        "E189-2"
+      ]
+    },
+    {
+      "eventID": "E190",
+      "month": "agosto",
+      "occurrences": [
+        "E190-1",
+        "E190-2"
+      ]
+    },
+    {
+      "eventID": "E191",
+      "month": "agosto",
+      "occurrences": [
+        "E191-1",
+        "E191-2"
+      ]
+    },
+    {
+      "eventID": "E192",
+      "month": "agosto",
+      "occurrences": [
+        "E192-1",
+        "E192-2"
+      ]
+    },
+    {
+      "eventID": "E193",
+      "month": "agosto",
+      "occurrences": [
+        "E193-1",
+        "E193-2"
+      ]
+    },
+    {
+      "eventID": "E194",
+      "month": "agosto",
+      "occurrences": [
+        "E194-1",
+        "E194-2"
+      ]
+    },
+    {
+      "eventID": "E195",
+      "month": "agosto",
+      "occurrences": [
+        "E195-1",
+        "E195-2"
+      ]
+    },
+    {
+      "eventID": "E196",
+      "month": "agosto",
+      "occurrences": [
+        "E196-1",
+        "E196-2"
+      ]
+    },
+    {
+      "eventID": "E197",
+      "month": "agosto",
+      "occurrences": [
+        "E197-1",
+        "E197-2"
+      ]
+    },
+    {
+      "eventID": "E198",
+      "month": "agosto",
+      "occurrences": [
+        "E198-1",
+        "E198-2"
+      ]
+    },
+    {
+      "eventID": "E199",
+      "month": "agosto",
+      "occurrences": [
+        "E199-1",
+        "E199-2"
+      ]
+    },
+    {
+      "eventID": "E200",
+      "month": "agosto",
+      "occurrences": [
+        "E200-1",
+        "E200-2"
+      ]
+    },
+    {
+      "eventID": "E201",
+      "month": "septiembre",
+      "occurrences": [
+        "E201-1",
+        "E201-2"
+      ]
+    },
+    {
+      "eventID": "E202",
+      "month": "septiembre",
+      "occurrences": [
+        "E202-1",
+        "E202-2"
+      ]
+    },
+    {
+      "eventID": "E203",
+      "month": "septiembre",
+      "occurrences": [
+        "E203-1",
+        "E203-2"
+      ]
+    },
+    {
+      "eventID": "E204",
+      "month": "septiembre",
+      "occurrences": [
+        "E204-1",
+        "E204-2"
+      ]
+    },
+    {
+      "eventID": "E205",
+      "month": "septiembre",
+      "occurrences": [
+        "E205-1",
+        "E205-2"
+      ]
+    },
+    {
+      "eventID": "E206",
+      "month": "septiembre",
+      "occurrences": [
+        "E206-1",
+        "E206-2"
+      ]
+    },
+    {
+      "eventID": "E207",
+      "month": "septiembre",
+      "occurrences": [
+        "E207-1",
+        "E207-2"
+      ]
+    },
+    {
+      "eventID": "E208",
+      "month": "septiembre",
+      "occurrences": [
+        "E208-1",
+        "E208-2"
+      ]
+    },
+    {
+      "eventID": "E209",
+      "month": "septiembre",
+      "occurrences": [
+        "E209-1",
+        "E209-2"
+      ]
+    },
+    {
+      "eventID": "E210",
+      "month": "septiembre",
+      "occurrences": [
+        "E210-1",
+        "E210-2"
+      ]
+    },
+    {
+      "eventID": "E211",
+      "month": "septiembre",
+      "occurrences": [
+        "E211-1",
+        "E211-2"
+      ]
+    },
+    {
+      "eventID": "E212",
+      "month": "septiembre",
+      "occurrences": [
+        "E212-1",
+        "E212-2"
+      ]
+    },
+    {
+      "eventID": "E213",
+      "month": "septiembre",
+      "occurrences": [
+        "E213-1",
+        "E213-2"
+      ]
+    },
+    {
+      "eventID": "E214",
+      "month": "septiembre",
+      "occurrences": [
+        "E214-1",
+        "E214-2"
+      ]
+    },
+    {
+      "eventID": "E215",
+      "month": "septiembre",
+      "occurrences": [
+        "E215-1",
+        "E215-2"
+      ]
+    },
+    {
+      "eventID": "E216",
+      "month": "septiembre",
+      "occurrences": [
+        "E216-1",
+        "E216-2"
+      ]
+    },
+    {
+      "eventID": "E217",
+      "month": "septiembre",
+      "occurrences": [
+        "E217-1",
+        "E217-2"
+      ]
+    },
+    {
+      "eventID": "E218",
+      "month": "septiembre",
+      "occurrences": [
+        "E218-1",
+        "E218-2"
+      ]
+    },
+    {
+      "eventID": "E219",
+      "month": "septiembre",
+      "occurrences": [
+        "E219-1",
+        "E219-2"
+      ]
+    },
+    {
+      "eventID": "E220",
+      "month": "septiembre",
+      "occurrences": [
+        "E220-1",
+        "E220-2"
+      ]
+    },
+    {
+      "eventID": "E221",
+      "month": "septiembre",
+      "occurrences": [
+        "E221-1",
+        "E221-2"
+      ]
+    },
+    {
+      "eventID": "E222",
+      "month": "septiembre",
+      "occurrences": [
+        "E222-1",
+        "E222-2"
+      ]
+    },
+    {
+      "eventID": "E223",
+      "month": "septiembre",
+      "occurrences": [
+        "E223-1",
+        "E223-2"
+      ]
+    },
+    {
+      "eventID": "E224",
+      "month": "septiembre",
+      "occurrences": [
+        "E224-1",
+        "E224-2"
+      ]
+    },
+    {
+      "eventID": "E225",
+      "month": "septiembre",
+      "occurrences": [
+        "E225-1",
+        "E225-2"
+      ]
+    },
+    {
+      "eventID": "E226",
+      "month": "octubre",
+      "occurrences": [
+        "E226-1",
+        "E226-2"
+      ]
+    },
+    {
+      "eventID": "E227",
+      "month": "octubre",
+      "occurrences": [
+        "E227-1",
+        "E227-2"
+      ]
+    },
+    {
+      "eventID": "E228",
+      "month": "octubre",
+      "occurrences": [
+        "E228-1",
+        "E228-2"
+      ]
+    },
+    {
+      "eventID": "E229",
+      "month": "octubre",
+      "occurrences": [
+        "E229-1",
+        "E229-2"
+      ]
+    },
+    {
+      "eventID": "E230",
+      "month": "octubre",
+      "occurrences": [
+        "E230-1",
+        "E230-2"
+      ]
+    },
+    {
+      "eventID": "E231",
+      "month": "octubre",
+      "occurrences": [
+        "E231-1",
+        "E231-2"
+      ]
+    },
+    {
+      "eventID": "E232",
+      "month": "octubre",
+      "occurrences": [
+        "E232-1",
+        "E232-2"
+      ]
+    },
+    {
+      "eventID": "E233",
+      "month": "octubre",
+      "occurrences": [
+        "E233-1",
+        "E233-2"
+      ]
+    },
+    {
+      "eventID": "E234",
+      "month": "octubre",
+      "occurrences": [
+        "E234-1",
+        "E234-2"
+      ]
+    },
+    {
+      "eventID": "E235",
+      "month": "octubre",
+      "occurrences": [
+        "E235-1",
+        "E235-2"
+      ]
+    },
+    {
+      "eventID": "E236",
+      "month": "octubre",
+      "occurrences": [
+        "E236-1",
+        "E236-2"
+      ]
+    },
+    {
+      "eventID": "E237",
+      "month": "octubre",
+      "occurrences": [
+        "E237-1",
+        "E237-2"
+      ]
+    },
+    {
+      "eventID": "E238",
+      "month": "octubre",
+      "occurrences": [
+        "E238-1",
+        "E238-2"
+      ]
+    },
+    {
+      "eventID": "E239",
+      "month": "octubre",
+      "occurrences": [
+        "E239-1",
+        "E239-2"
+      ]
+    },
+    {
+      "eventID": "E240",
+      "month": "octubre",
+      "occurrences": [
+        "E240-1",
+        "E240-2"
+      ]
+    },
+    {
+      "eventID": "E241",
+      "month": "octubre",
+      "occurrences": [
+        "E241-1",
+        "E241-2"
+      ]
+    },
+    {
+      "eventID": "E242",
+      "month": "octubre",
+      "occurrences": [
+        "E242-1",
+        "E242-2"
+      ]
+    },
+    {
+      "eventID": "E243",
+      "month": "octubre",
+      "occurrences": [
+        "E243-1",
+        "E243-2"
+      ]
+    },
+    {
+      "eventID": "E244",
+      "month": "octubre",
+      "occurrences": [
+        "E244-1",
+        "E244-2"
+      ]
+    },
+    {
+      "eventID": "E245",
+      "month": "octubre",
+      "occurrences": [
+        "E245-1",
+        "E245-2"
+      ]
+    },
+    {
+      "eventID": "E246",
+      "month": "octubre",
+      "occurrences": [
+        "E246-1",
+        "E246-2"
+      ]
+    },
+    {
+      "eventID": "E247",
+      "month": "octubre",
+      "occurrences": [
+        "E247-1",
+        "E247-2"
+      ]
+    },
+    {
+      "eventID": "E248",
+      "month": "octubre",
+      "occurrences": [
+        "E248-1",
+        "E248-2"
+      ]
+    },
+    {
+      "eventID": "E249",
+      "month": "octubre",
+      "occurrences": [
+        "E249-1",
+        "E249-2"
+      ]
+    },
+    {
+      "eventID": "E250",
+      "month": "octubre",
+      "occurrences": [
+        "E250-1",
+        "E250-2"
+      ]
+    },
+    {
+      "eventID": "E251",
+      "month": "noviembre",
+      "occurrences": [
+        "E251-1",
+        "E251-2"
+      ]
+    },
+    {
+      "eventID": "E252",
+      "month": "noviembre",
+      "occurrences": [
+        "E252-1",
+        "E252-2"
+      ]
+    },
+    {
+      "eventID": "E253",
+      "month": "noviembre",
+      "occurrences": [
+        "E253-1",
+        "E253-2"
+      ]
+    },
+    {
+      "eventID": "E254",
+      "month": "noviembre",
+      "occurrences": [
+        "E254-1",
+        "E254-2"
+      ]
+    },
+    {
+      "eventID": "E255",
+      "month": "noviembre",
+      "occurrences": [
+        "E255-1",
+        "E255-2"
+      ]
+    },
+    {
+      "eventID": "E256",
+      "month": "noviembre",
+      "occurrences": [
+        "E256-1",
+        "E256-2"
+      ]
+    },
+    {
+      "eventID": "E257",
+      "month": "noviembre",
+      "occurrences": [
+        "E257-1",
+        "E257-2"
+      ]
+    },
+    {
+      "eventID": "E258",
+      "month": "noviembre",
+      "occurrences": [
+        "E258-1",
+        "E258-2"
+      ]
+    },
+    {
+      "eventID": "E259",
+      "month": "noviembre",
+      "occurrences": [
+        "E259-1",
+        "E259-2"
+      ]
+    },
+    {
+      "eventID": "E260",
+      "month": "noviembre",
+      "occurrences": [
+        "E260-1",
+        "E260-2"
+      ]
+    },
+    {
+      "eventID": "E261",
+      "month": "noviembre",
+      "occurrences": [
+        "E261-1",
+        "E261-2"
+      ]
+    },
+    {
+      "eventID": "E262",
+      "month": "noviembre",
+      "occurrences": [
+        "E262-1",
+        "E262-2"
+      ]
+    },
+    {
+      "eventID": "E263",
+      "month": "noviembre",
+      "occurrences": [
+        "E263-1",
+        "E263-2"
+      ]
+    },
+    {
+      "eventID": "E264",
+      "month": "noviembre",
+      "occurrences": [
+        "E264-1",
+        "E264-2"
+      ]
+    },
+    {
+      "eventID": "E265",
+      "month": "noviembre",
+      "occurrences": [
+        "E265-1",
+        "E265-2"
+      ]
+    },
+    {
+      "eventID": "E266",
+      "month": "noviembre",
+      "occurrences": [
+        "E266-1",
+        "E266-2"
+      ]
+    },
+    {
+      "eventID": "E267",
+      "month": "noviembre",
+      "occurrences": [
+        "E267-1",
+        "E267-2"
+      ]
+    },
+    {
+      "eventID": "E268",
+      "month": "noviembre",
+      "occurrences": [
+        "E268-1",
+        "E268-2"
+      ]
+    },
+    {
+      "eventID": "E269",
+      "month": "noviembre",
+      "occurrences": [
+        "E269-1",
+        "E269-2"
+      ]
+    },
+    {
+      "eventID": "E270",
+      "month": "noviembre",
+      "occurrences": [
+        "E270-1",
+        "E270-2"
+      ]
+    },
+    {
+      "eventID": "E271",
+      "month": "noviembre",
+      "occurrences": [
+        "E271-1",
+        "E271-2"
+      ]
+    },
+    {
+      "eventID": "E272",
+      "month": "noviembre",
+      "occurrences": [
+        "E272-1",
+        "E272-2"
+      ]
+    },
+    {
+      "eventID": "E273",
+      "month": "noviembre",
+      "occurrences": [
+        "E273-1",
+        "E273-2"
+      ]
+    },
+    {
+      "eventID": "E274",
+      "month": "noviembre",
+      "occurrences": [
+        "E274-1",
+        "E274-2"
+      ]
+    },
+    {
+      "eventID": "E275",
+      "month": "noviembre",
+      "occurrences": [
+        "E275-1",
+        "E275-2"
+      ]
+    },
+    {
+      "eventID": "E276",
+      "month": "diciembre",
+      "occurrences": [
+        "E276-1",
+        "E276-2"
+      ]
+    },
+    {
+      "eventID": "E277",
+      "month": "diciembre",
+      "occurrences": [
+        "E277-1",
+        "E277-2"
+      ]
+    },
+    {
+      "eventID": "E278",
+      "month": "diciembre",
+      "occurrences": [
+        "E278-1",
+        "E278-2"
+      ]
+    },
+    {
+      "eventID": "E279",
+      "month": "diciembre",
+      "occurrences": [
+        "E279-1",
+        "E279-2"
+      ]
+    },
+    {
+      "eventID": "E280",
+      "month": "diciembre",
+      "occurrences": [
+        "E280-1",
+        "E280-2"
+      ]
+    },
+    {
+      "eventID": "E281",
+      "month": "diciembre",
+      "occurrences": [
+        "E281-1",
+        "E281-2"
+      ]
+    },
+    {
+      "eventID": "E282",
+      "month": "diciembre",
+      "occurrences": [
+        "E282-1",
+        "E282-2"
+      ]
+    },
+    {
+      "eventID": "E283",
+      "month": "diciembre",
+      "occurrences": [
+        "E283-1",
+        "E283-2"
+      ]
+    },
+    {
+      "eventID": "E284",
+      "month": "diciembre",
+      "occurrences": [
+        "E284-1",
+        "E284-2"
+      ]
+    },
+    {
+      "eventID": "E285",
+      "month": "diciembre",
+      "occurrences": [
+        "E285-1",
+        "E285-2"
+      ]
+    },
+    {
+      "eventID": "E286",
+      "month": "diciembre",
+      "occurrences": [
+        "E286-1",
+        "E286-2"
+      ]
+    },
+    {
+      "eventID": "E287",
+      "month": "diciembre",
+      "occurrences": [
+        "E287-1",
+        "E287-2"
+      ]
+    },
+    {
+      "eventID": "E288",
+      "month": "diciembre",
+      "occurrences": [
+        "E288-1",
+        "E288-2"
+      ]
+    },
+    {
+      "eventID": "E289",
+      "month": "diciembre",
+      "occurrences": [
+        "E289-1",
+        "E289-2"
+      ]
+    },
+    {
+      "eventID": "E290",
+      "month": "diciembre",
+      "occurrences": [
+        "E290-1",
+        "E290-2"
+      ]
+    },
+    {
+      "eventID": "E291",
+      "month": "diciembre",
+      "occurrences": [
+        "E291-1",
+        "E291-2"
+      ]
+    },
+    {
+      "eventID": "E292",
+      "month": "diciembre",
+      "occurrences": [
+        "E292-1",
+        "E292-2"
+      ]
+    },
+    {
+      "eventID": "E293",
+      "month": "diciembre",
+      "occurrences": [
+        "E293-1",
+        "E293-2"
+      ]
+    },
+    {
+      "eventID": "E294",
+      "month": "diciembre",
+      "occurrences": [
+        "E294-1",
+        "E294-2"
+      ]
+    },
+    {
+      "eventID": "E295",
+      "month": "diciembre",
+      "occurrences": [
+        "E295-1",
+        "E295-2"
+      ]
+    },
+    {
+      "eventID": "E296",
+      "month": "diciembre",
+      "occurrences": [
+        "E296-1",
+        "E296-2"
+      ]
+    },
+    {
+      "eventID": "E297",
+      "month": "diciembre",
+      "occurrences": [
+        "E297-1",
+        "E297-2"
+      ]
+    },
+    {
+      "eventID": "E298",
+      "month": "diciembre",
+      "occurrences": [
+        "E298-1",
+        "E298-2"
+      ]
+    },
+    {
+      "eventID": "E299",
+      "month": "diciembre",
+      "occurrences": [
+        "E299-1",
+        "E299-2"
+      ]
+    },
+    {
+      "eventID": "E300",
+      "month": "diciembre",
+      "occurrences": [
+        "E300-1",
+        "E300-2"
+      ]
+    }
+  ],
+  "months": [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre"
+  ]
+}

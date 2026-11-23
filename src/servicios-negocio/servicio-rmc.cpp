@@ -102,9 +102,6 @@ Función: Llama a la función checkSeats para saber si hay suficientes asientos,
 */
 std::string reserveSeats (zmq::socket_t &persistenceSocket, std::string clientID, std::string eventID, std::string occurenceID, int quantity){
     if (quantity <= 0) return "ERROR: Cantidad invalida";   
-    std::string check = checkSeats(persistenceSocket, eventID, occurenceID, quantity);
-
-    if (check != "OK") return check;
 
     Request reserve{};
     reserve.request = RESERVE;
