@@ -1,9 +1,16 @@
 /*
 Archivo: servicio-persistencia.cpp
-Objetivo: Recibir las solicitudes desde el servicio RMC y realizar las distintas operaciones en la persistencia de datos usando postgreSQL y su librería oficial.
-Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, modifyQuantity, modifyOcurrence, attend
+Objetivo: Atender solicitudes concurrentes de RMC y Cancelación con conexiones a PostgreSQL exclusivas de cada trabajador.
+Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, modifyQuantity, modifyOccurrence, cancelReservation, executeIdempotent, processRequest, runWorker, main
 */
 
+#include <cerrno>
+#include <cctype>
+#include <exception>
+#include <functional>
+#include <mutex>
+#include <thread>
+#include <type_traits>
 #include <vector>
 #include <stdexcept>
 #include <string>
@@ -11,10 +18,24 @@ Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEve
 #include <iostream>
 #include <memory>
 #include <sstream>
-#include <cstdlib>
 #include <zmq.hpp>
+#include <zmq_addon.hpp>
 #include <pqxx/pqxx>
-#include "../request-structs/structs.cpp"   
+#include "../request-structs/structs.cpp"
+
+constexpr int PERSISTENCE_WORKERS = 4;
+constexpr char WORKER_ENDPOINT[] = "inproc://persistence-workers";
+
+/* writeLog
+Parametros de entrada: flujo de salida (ostream), mensaje (String)
+Parametros de salida: Ninguno
+Función: Escribe el mensaje completo bajo un mutex para que los trabajadores no mezclen sus registros.
+*/
+static void writeLog(std::ostream &output, const std::string &message) {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    output << message << std::endl;
+}
 
 static std::string err(const std::string& m) { return "ERROR: " + m; }
 
@@ -102,11 +123,11 @@ std::string queryEvents(pqxx::connection& db, int month) {
 }
 
 /* reserveSeats
-Parametros de entrada: conexión con la db, id del cliente (String), id del evento (String), id de la ocurrencia (String), cantidad de asientos a reservar (int)
+Parametros de entrada: transacción de PostgreSQL (transaction_base), id del cliente (String), id del evento (String), id de la ocurrencia (String), cantidad de asientos a reservar (int)
 Parametros de salida: String (OK con el id de reserva si se pudo, error en caso contrario)
 Función: Revisa la disponibilidad de cupos de una ocurrencia en determinado evento y dependiendo de esta hace una reserva o no.
 */
-std::string reserveSeats(pqxx::work& tx,, const std::string& clientID,
+std::string reserveSeats(pqxx::transaction_base& tx, const std::string& clientID,
                          const std::string& eventID, const std::string& occurrenceID,
                          int quantity) {
     if (quantity <= 0) return err("cantidad invalida");
@@ -128,11 +149,11 @@ std::string reserveSeats(pqxx::work& tx,, const std::string& clientID,
 
 
 /* modifyQuantity
-Parametros de entrada: conexión con la db, id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String), nueva cantidad de asientos (int)
+Parametros de entrada: transacción de PostgreSQL (transaction_base), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String), nueva cantidad de asientos (int)
 Parametros de salida: String (OK si se pudo, Error si no)
 Función: Revisa si es posible cambiar la cantidad de asientos reservados en un pedido y realiza el cambio en caso de que sea posible. 
 */
-std::string modifyQuantity(pqxx::work& tx,, const std::string& reservationID,
+std::string modifyQuantity(pqxx::transaction_base& tx, const std::string& reservationID,
                            const std::string& clientID, const std::string& eventID,
                            const std::string& occurrenceID, int newQuantity) {
     if (newQuantity<=0) return err("cantidad invalida");
@@ -160,11 +181,11 @@ std::string modifyQuantity(pqxx::work& tx,, const std::string& reservationID,
 }
 
 /* modifyOccurrence
-Parametros de entrada: conexión con la db, id de la reserva (String), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String)
+Parametros de entrada: transacción de PostgreSQL (transaction_base), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String)
 Parametros de salida: String (OK si se pudo, Error si no)
-Función: Busca otras ocurrencias del mismo evento para poder cambiar los eventos de la ocurrencia actual a otra distinta.
+Función: Mueve la reserva entre ocurrencias del evento. Bloquea ambas por ID ascendente para evitar interbloqueos cuando dos operaciones mueven reservas en sentidos opuestos.
 */
-std::string modifyOccurrence(pqxx::work& tx, const std::string& reservationID,
+std::string modifyOccurrence(pqxx::transaction_base& tx, const std::string& reservationID,
                              const std::string& clientID, const std::string& eventID,
                              const std::string& occurrenceID) {
 
@@ -180,6 +201,13 @@ std::string modifyOccurrence(pqxx::work& tx, const std::string& reservationID,
     int  seats  = cur[0]["seat_count"].as<int>();
     if (oldOcc == occurrenceID) return err("la reserva ya esta en esa ocurrencia");
 
+    // Bloquear en el mismo orden aunque origen y destino estén invertidos.
+    auto locked = tx.exec_params(
+        "SELECT occurrence_id FROM event_occurrences "
+        "WHERE event_id = $1 AND occurrence_id IN ($2, $3) "
+        "ORDER BY occurrence_id FOR NO KEY UPDATE", eventID, oldOcc, occurrenceID);
+    if (locked.size() != 2) return err("sin cupo o la nueva ocurrencia no es de ese evento");
+
     auto take = tx.exec_params(
         "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
         "WHERE occurrence_id = $2 AND event_id = $3 AND occupied_seats + $1 <= capacity", seats, occurrenceID, eventID);
@@ -187,19 +215,25 @@ std::string modifyOccurrence(pqxx::work& tx, const std::string& reservationID,
     if (take.affected_rows() != 1)
         return err("sin cupo o la nueva ocurrencia no es de ese evento");
 
-    tx.exec_params("UPDATE event_occurrences SET occupied_seats = occupied_seats - $1 "
-                   "WHERE occurrence_id = $2", seats, oldOcc); //OldOcc new seats
-    tx.exec_params("UPDATE reservations SET occurrence_id = $2 WHERE reservation_id = $1", reservationID, occurrenceID); //new reservation Ocurrence
+    auto release = tx.exec_params(
+        "UPDATE event_occurrences SET occupied_seats = occupied_seats - $1 "
+        "WHERE occurrence_id = $2 AND occupied_seats >= $1", seats, oldOcc);
+    if (release.affected_rows() != 1) return err("no se pudieron liberar los asientos de la ocurrencia");
+
+    auto move = tx.exec_params(
+        "UPDATE reservations SET occurrence_id = $2 WHERE reservation_id = $1",
+        reservationID, occurrenceID);
+    if (move.affected_rows() != 1) return err("no se pudo cambiar la ocurrencia de la reserva");
 
     return "OK";
 }
 
 /* cancelReservation
-Parametros de entrada: conexión con la db, id de la reserva (String), id del cliente (String)
+Parametros de entrada: transacción de PostgreSQL (transaction_base), id de la reserva (String), id del cliente (String)
 Parametros de salida: String (OK si se pudo, Error si no)
 Función: Verifica que la reserva exista, esté activa y pertenezca al cliente, libera los asientos ocupados en la ocurrencia correspondiente y cambia el estado de la reserva a CANCELLED.
 */
-std::string cancelReservation(pqxx::work& tx, const std::string& reservationID,
+std::string cancelReservation(pqxx::transaction_base& tx, const std::string& reservationID,
                               const std::string& clientID) {
 
     auto cur = tx.exec_params(
@@ -229,8 +263,13 @@ std::string cancelReservation(pqxx::work& tx, const std::string& reservationID,
 }
 
 
+/* executeWrite
+Parametros de entrada: transacción de PostgreSQL (transaction_base), solicitud (Request)
+Parametros de salida: String (resultado de la operación)
+Función: Ejecuta la escritura dentro de la subtransacción abierta por executeIdempotent.
+*/
 std::string executeWrite(
-    pqxx::work& tx,
+    pqxx::transaction_base& tx,
     const Request& q
 ) {
     switch (q.request) {
@@ -364,6 +403,13 @@ bool isWriteOperation(const Request& q) {
 }
 
 
+/* executeIdempotent
+Parametros de entrada: conexión a la base principal (connection), solicitud (Request)
+Parametros de salida: String (resultado original o error si el UUID se reutiliza con otros datos)
+Función: Reclama el UUID mediante la restricción única de processed_requests. Guarda la respuesta y las escrituras
+         exitosas en la misma transacción. Si la operación devuelve un error de negocio, revierte sus cambios
+         mediante una subtransacción y guarda solo la respuesta para los reintentos.
+*/
 std::string executeIdempotent(
     pqxx::connection& db,
     const Request& q
@@ -423,14 +469,21 @@ std::string executeIdempotent(
 
         std::string response = row["response"].as<std::string>();
 
-        std::cout << "[IDEMPOTENCIA] Solicitud repetida: "
-                  << requestId << '\n';
+        writeLog(std::cout, "[IDEMPOTENCIA] Solicitud repetida: " + requestId);
 
         return response;
     }
 
-    // Primera ejecución de esta solicitud.
-    std::string response = executeWrite(tx, q);
+    std::string response;
+    {
+        pqxx::subtransaction operation(tx, "request_write");
+        response = executeWrite(operation, q);
+        if (response.rfind("OK", 0) == 0) {
+            operation.commit();
+        } else {
+            operation.abort();
+        }
+    }
 
     // Guardar el resultado en la misma transacción.
     tx.exec_params(
@@ -444,85 +497,166 @@ std::string executeIdempotent(
     // Confirmar operación y respuesta conjuntamente.
     tx.commit();
 
-    std::cout << "[IDEMPOTENCIA] Solicitud nueva: "
-              << requestId << '\n';
+    writeLog(std::cout, "[IDEMPOTENCIA] Solicitud nueva: " + requestId);
 
     return response;
 }
 
+/* processRequest
+Parametros de entrada: solicitud (Request), conexión del trabajador a la base seleccionada (unique_ptr),
+                      datos de conexión (String)
+Parametros de salida: String (respuesta de la operación o error de conexión)
+Función: Abre la conexión cuando se necesita. Si se pierde, permite reintentar QUERY y descarta la conexión rota.
+         Una escritura con resultado incierto puede consultarse reenviando el UUID original desde el cliente.
+*/
+static std::string processRequest(const Request &request, std::unique_ptr<pqxx::connection> &database,
+                                  const std::string &conninfo) {
+    const bool readReplica = useReplica(request);
+
+    try {
+        if (!database) database = std::make_unique<pqxx::connection>(conninfo);
+
+        if (isWriteOperation(request)) return executeIdempotent(*database, request);
+        return attend(*database, request);
+    } catch (const pqxx::in_doubt_error &) {
+        database.reset();
+        return err("Conexion perdida; resultado de operacion desconocido");
+    } catch (const pqxx::broken_connection &) {
+        database.reset();
+        if (!readReplica) return err("Conexion perdida; resultado de operacion desconocido");
+
+        database = std::make_unique<pqxx::connection>(conninfo);
+        return attend(*database, request);
+    }
+}
+
+/* runWorker
+Parametros de entrada: contexto de ZeroMQ (context_t), datos de conexión a la base principal y la réplica (String),
+                      número de trabajador (int)
+Parametros de salida: Ninguno
+Función: Recibe una solicitud por su socket REP, ejecuta la operación con conexiones exclusivas del hilo y responde.
+         Registra la recepción y la respuesta con el UUID para seguir la solicitud desde el gestor y RMC.
+*/
+static void runWorker(zmq::context_t &context, const std::string &primaryConninfo,
+                      const std::string &replicaConninfo, int workerId) {
+    std::unique_ptr<pqxx::connection> primaryDB;
+    std::unique_ptr<pqxx::connection> replicaDB;
+    const std::string prefix = "[PERSISTENCIA] Hilo " + std::to_string(workerId);
+
+    try {
+        zmq::socket_t worker(context, zmq::socket_type::rep);
+        worker.set(zmq::sockopt::linger, 0);
+        worker.set(zmq::sockopt::rcvhwm, 1);
+        worker.connect(WORKER_ENDPOINT);
+
+        while (true) {
+            zmq::multipart_t message;
+            if (!message.recv(worker)) continue;
+
+            if (message.size() != 1 || message[0].size() != sizeof(Request)) {
+                sendResponse(worker, err("solicitud invalida"));
+                writeLog(std::cout, prefix + " | Solicitud invalida");
+                continue;
+            }
+
+            Request request{};
+            std::memcpy(&request, message[0].data(), sizeof(request));
+
+            std::underlying_type_t<RequestType> operation;
+            std::memcpy(&operation, &request.request, sizeof(operation));
+            if (operation > CHECK_OCCURRENCES) {
+                sendResponse(worker, err("solicitud desconocida"));
+                continue;
+            }
+
+            request.clientID[sizeof(request.clientID) - 1] = '\0';
+            request.eventID[sizeof(request.eventID) - 1] = '\0';
+            request.occurrenceID[sizeof(request.occurrenceID) - 1] = '\0';
+            request.reservationID[sizeof(request.reservationID) - 1] = '\0';
+            request.month[sizeof(request.month) - 1] = '\0';
+
+            const bool replica = useReplica(request);
+            const std::string trace = prefix + " | UUID: " + boundedString(request.requestId)
+                                    + " | Operacion: " + requestTypeName(request.request)
+                                    + " | Base: " + (replica ? "replica" : "principal");
+            writeLog(std::cout, trace + " | Solicitud recibida");
+
+            std::string response;
+            try {
+                response = processRequest(request, replica ? replicaDB : primaryDB,
+                                          replica ? replicaConninfo : primaryConninfo);
+            } catch (const pqxx::broken_connection &error) {
+                (replica ? replicaDB : primaryDB).reset();
+                writeLog(std::cerr, trace + " | " + error.what());
+                response = err("Error de servidor");
+            } catch (const std::exception &error) {
+                writeLog(std::cerr, trace + " | " + error.what());
+                response = err("Error de servidor");
+            }
+
+            sendResponse(worker, response);
+            writeLog(std::cout, trace + " | [RESP] " + response);
+        }
+    } catch (const zmq::error_t &error) {
+        if (error.num() != ETERM) {
+            writeLog(std::cerr, prefix + " | Error en trabajador: " + error.what());
+            context.shutdown();
+        }
+    } catch (const std::exception &error) {
+        writeLog(std::cerr, prefix + " | Error en trabajador: " + error.what());
+        context.shutdown();
+    }
+}
+
+/* main
+Parametros de entrada: cantidad de argumentos (int), argumentos de ejecución (char**)
+Parametros de salida: 0 al completar la ejecución, 1 si ocurre un error
+Función: Conserva el puerto de persistencia y distribuye las solicitudes con un proxy ROUTER/DEALER.
+         Al salir del distribuidor, cierra el contexto y espera a los trabajadores.
+*/
 int main(int argc, char *argv[]) {
-
-
-    if(argc != 2){
-        std::cout<<"Error: Numero de argumentos incorrecto\n";
-        std::cout<<"Formato: "<<argv[0]<<" <ip-persistencia>\n";
+    if (argc != 2) {
+        std::cout << "Error: Numero de argumentos incorrecto\n";
+        std::cout << "Formato: " << argv[0] << " <ip-persistencia>\n";
         return 1;
     }
 
-    std::string ipPersistence= "tcp://";
-    ipPersistence+=argv[1];
-    ipPersistence+=":8888";
+    const std::string endpoint = std::string("tcp://") + argv[1] + ":8888";
+    const std::string primaryConninfo = "host=localhost port=5432 dbname=event-reservation user=root password=root";
+    const std::string replicaConninfo = "host=localhost port=5433 dbname=event-reservation user=root password=root";
 
+    zmq::context_t context(1);
+    std::vector<std::thread> workers;
+    int status = 0;
 
-    std::string primaryConninfo = "host=localhost port=5432 dbname=event-reservation user=root password=root";
-    std::string replicaConninfo = "host=localhost port=5433 dbname=event-reservation user=root password=root";
+    try {
+        zmq::socket_t frontend(context, zmq::socket_type::router);
+        frontend.set(zmq::sockopt::linger, 0);
+        frontend.bind(endpoint);
 
-    auto primaryDB = std::make_unique<pqxx::connection>(primaryConninfo);
-    auto replicaDB = std::make_unique<pqxx::connection>(replicaConninfo);
+        zmq::socket_t distributor(context, zmq::socket_type::dealer);
+        distributor.set(zmq::sockopt::linger, 0);
+        distributor.set(zmq::sockopt::sndhwm, 1);
+        distributor.bind(WORKER_ENDPOINT);
 
-    zmq::context_t ctx(1);
-    zmq::socket_t rmcSocket(ctx, zmq::socket_type::rep);
-    rmcSocket.bind(ipPersistence);
-
-    while (true) {
-
-        zmq::message_t msg;
-        auto result = rmcSocket.recv(msg, zmq::recv_flags::none);
-        if (!result) continue;
-
-        std::string resp;
-        if (msg.size() != sizeof(Request)) {
-            resp = err("solicitud invalida");
-            sendResponse(rmcSocket, resp);
-            continue;
-        } 
-
-        Request q{};
-        memcpy(&q, msg.data(), sizeof(Request));
-
-        try {
-            bool readReplica = useReplica(q);
-
-            auto& selectedDB = readReplica ? replicaDB : primaryDB;
-
-            const std::string& conninfo =
-                readReplica ? replicaConninfo : primaryConninfo;
-
-            try {
-                if (isWriteOperation(q)) {
-                    resp = executeIdempotent(*primaryDB, q);
-                } else {
-                    resp = attend(*selectedDB, q);
-                }
-            } catch (const pqxx::broken_connection&) {
-                selectedDB = std::make_unique<pqxx::connection>(conninfo);
-
-                // Reintento automático solo para consultas de lectura.
-                if (readReplica) {
-                    resp = attend(*selectedDB, q);
-                } else {
-                    resp = err("Conexion perdida; resultado de operacion desconocido");
-                }
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "[PERSISTENCIA] " << e.what() << '\n';
-            resp = err("Error de servidor");
+        workers.reserve(PERSISTENCE_WORKERS);
+        for (int i = 0; i < PERSISTENCE_WORKERS; ++i) {
+            workers.emplace_back(runWorker, std::ref(context), std::cref(primaryConninfo),
+                                 std::cref(replicaConninfo), i + 1);
         }
 
-
-        std::cout<<"Solicitud recibida:"<<q.request<<"\n";
-
-        std::cout << "[RESP] " << resp << "\n";
-        sendResponse(rmcSocket, resp);
+        writeLog(std::cout, "[PERSISTENCIA] Escuchando en " + endpoint + " con "
+                            + std::to_string(PERSISTENCE_WORKERS) + " trabajadores");
+        zmq::proxy(frontend, distributor);
+    } catch (const std::exception &error) {
+        writeLog(std::cerr, std::string("[PERSISTENCIA] Error en distribuidor: ") + error.what());
+        status = 1;
     }
+
+    context.shutdown();
+    for (auto &worker : workers) {
+        worker.join();
+    }
+    return status;
 }
+

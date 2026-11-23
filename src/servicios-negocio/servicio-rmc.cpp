@@ -1,274 +1,205 @@
 /*
 Archivo: servicio-rmc.cpp
-Objetivo: Recibir las solicitudes desde el Gestor de Transacciones y realizar la comunicación con el servicio de persistencia para retornar la respuesta al gestor.
-Funciones: sendResponse, sendPersistence, checkSeats, checkReservation, checkOccurrence, checkEvents, reserveSeats, modifyQuantity, modifyOcurrence
+Objetivo: Atender solicitudes concurrentes del Gestor de Transacciones mediante un distribuidor ROUTER/DEALER y un grupo de trabajadores.
+Funciones: sendResponse, sendPersistence, traceRequest, processRequest, runWorker, main
 */
 
-#include <string>
-#include <zmq.hpp>
+#include <cerrno>
 #include <cstring>
-#include "../request-structs/structs.cpp"
+#include <exception>
+#include <functional>
 #include <iostream>
-#include <cstring>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <type_traits>
+#include <vector>
+#include <zmq.hpp>
+#include <zmq_addon.hpp>
+#include "../request-structs/structs.cpp"
 
-template <size_t N>
-static std::string str(const char (&a)[N]) { return std::string(a, strnlen(a, N)); }
-
+constexpr int RMC_WORKERS = 4;
+constexpr int PERSISTENCE_SEND_TIMEOUT_MS = 100;
+constexpr int PERSISTENCE_RECV_TIMEOUT_MS = 1500;
+constexpr char WORKER_ENDPOINT[] = "inproc://rmc-workers";
 
 /* sendResponse
-Parametros de entrada: socket del zmq (zmq), respuesta (String)
+Parametros de entrada: socket de respuestas (socket_t), respuesta (String)
 Parametros de salida: Ninguno
-Función: Envia la respuesta (reply) al socket correspondiente.
+Función: Envía la respuesta al distribuidor interno. El socket REP conserva el sobre para que el ROUTER la entregue al gestor correcto.
 */
-void sendResponse(zmq::socket_t &socket, const std::string &response) {
-    zmq::message_t reply(response.data(), response.size());
-    socket.send(reply, zmq::send_flags::none);
+static void sendResponse(zmq::socket_t &socket, const std::string &response) {
+    socket.send(zmq::buffer(response), zmq::send_flags::none);
 }
 
 /* sendPersistence
-Parametros de entrada: socket del zmq/persistencia (zmq), solicitud (Request)
-Parametros de salida: String
-Función: Copia los datos de la solicitud, los envia al servicio de persistencia y los guarda en la variable result para luego retornarla
+Parametros de entrada: socket de persistencia del trabajador (socket_t), solicitud (Request)
+Parametros de salida: String (resultado de persistencia o error de comunicación)
+Función: Envía la solicitud una sola vez y espera dentro del plazo del socket. Si la espera vence, devuelve un error
+         y el socket puede iniciar otra solicitud con un identificador de correlación nuevo.
 */
-std::string sendPersistence(zmq::socket_t &persistenceSocket, const Request &req) {
-    zmq::message_t message(sizeof(Request));
-    memcpy(message.data(), &req, sizeof(Request));
-    persistenceSocket.send(message, zmq::send_flags::none);
+static std::string sendPersistence(zmq::socket_t &persistenceSocket, const Request &request) {
+    if (!persistenceSocket.send(zmq::buffer(&request, sizeof(request)), zmq::send_flags::none)) {
+        return "ERROR: sin respuesta de persistencia";
+    }
 
     zmq::message_t response;
-    auto result = persistenceSocket.recv(response, zmq::recv_flags::none);
-    if (!result) return "ERROR: sin respuesta de persistencia";
-
-    return std::string(static_cast<char*>(response.data()), response.size());
+    if (!persistenceSocket.recv(response, zmq::recv_flags::none)) {
+        return "ERROR: sin respuesta de persistencia";
+    }
+    return response.to_string();
 }
 
-/* checkSeats
-Parametros de entrada: socket del zmq/persistencia (zmq), id del evento (String), id de la ocurrencia (String), cantidad (int)
-Parametros de salida: String
-Función: Genera la solicitud de tipo CHECK_SEATS para luego enviarla al servicio de persistencia y comprobar si el numero de asientos disponible es mayor o igual a la cantidad solicitada, en tal caso retorna OK, en caso contrario retornará un error.
+/* traceRequest
+Parametros de entrada: número de trabajador (int), mensaje de seguimiento (char*), solicitud (Request)
+                      y respuesta opcional (char*)
+Parametros de salida: Ninguno
+Función: Imprime la operación y sus identificadores en un solo bloque para que los trabajadores
+         no mezclen sus mensajes de seguimiento en la consola.
 */
-std::string checkSeats(zmq::socket_t &persistenceSocket, std::string eventID, std::string occurenceID, int quantity){
-    Request check_seats{};
-    check_seats.request = CHECK_SEATS;
-    copy(check_seats.eventID, eventID);
-    copy(check_seats.occurrenceID, occurenceID);
+static void traceRequest(int workerId, const char *event, const Request &request, const char *response = nullptr) {
+    std::underlying_type_t<RequestType> code;
+    std::memcpy(&code, &request.request, sizeof(code));
+    const char *operation = code <= CHECK_OCCURRENCES ?
+                            requestTypeName(static_cast<RequestType>(code)) : "DESCONOCIDO";
+    std::ostringstream line;
+    line << "[RMC] " << event << " | Hilo: " << workerId << " | Request: " << operation
+         << " | Client: " << std::string(request.clientID, strnlen(request.clientID, sizeof(request.clientID)))
+         << " | UUID: " << std::string(request.requestId, strnlen(request.requestId, sizeof(request.requestId)))
+         << " | Run: " << std::string(request.runID, strnlen(request.runID, sizeof(request.runID)))
+         << " | ReqId: " << std::string(request.requestID, strnlen(request.requestID, sizeof(request.requestID)));
+    if (response != nullptr) line << " | Respuesta: " << response;
+    static std::mutex traceMutex;
+    std::lock_guard<std::mutex> lock(traceMutex);
+    std::cout << line.str() << std::endl;
+}
 
-    std::string response = sendPersistence(persistenceSocket, check_seats);
+/* processRequest
+Parametros de entrada: socket de persistencia del trabajador (socket_t), solicitud (Request)
+Parametros de salida: String (resultado de la operación o error de validación)
+Función: Valida el tipo y la cantidad cuando aplica, y remite la solicitud completa a persistencia.
+         La disponibilidad, la titularidad y el estado de la reserva se verifican dentro de la transacción que aplica el cambio.
+*/
+static std::string processRequest(zmq::socket_t &persistenceSocket, Request request) {
+    std::underlying_type_t<RequestType> operation;
+    std::memcpy(&operation, &request.request, sizeof(operation));
 
-    int available;
+    switch (operation) {
+        case RESERVE:
+        case MODIFY_QUANTITY:
+            if (request.quantity <= 0) return "ERROR: Cantidad invalida";
+            break;
+        case MODIFY_OCCURRENCE:
+        case QUERY:
+            break;
+        default:
+            return "ERROR: Solicitud desconocida";
+    }
+
+    request.clientID[sizeof(request.clientID) - 1] = '\0';
+    request.eventID[sizeof(request.eventID) - 1] = '\0';
+    request.occurrenceID[sizeof(request.occurrenceID) - 1] = '\0';
+    request.reservationID[sizeof(request.reservationID) - 1] = '\0';
+    request.month[sizeof(request.month) - 1] = '\0';
+    return sendPersistence(persistenceSocket, request);
+}
+
+/* runWorker
+Parametros de entrada: contexto compartido de ZeroMQ (context_t), dirección del servicio de persistencia (String), número de trabajador (int)
+Parametros de salida: Ninguno
+Función: Atiende solicitudes del distribuidor con sockets REP y REQ exclusivos de este hilo. Configura plazos de
+         comunicación y correlación en REQ para descartar respuestas tardías de operaciones anteriores.
+*/
+static void runWorker(zmq::context_t &context, const std::string &ipPersistence, int workerId) {
     try {
-        available = std::stoi(response);
-    }catch (...){
-        return response; //Llega un error 
+        zmq::socket_t persistenceSocket(context, zmq::socket_type::req);
+        persistenceSocket.set(zmq::sockopt::linger, 0);
+        persistenceSocket.set(zmq::sockopt::immediate, 1);
+        persistenceSocket.set(zmq::sockopt::sndtimeo, PERSISTENCE_SEND_TIMEOUT_MS);
+        persistenceSocket.set(zmq::sockopt::rcvtimeo, PERSISTENCE_RECV_TIMEOUT_MS);
+        persistenceSocket.set(zmq::sockopt::req_relaxed, 1);
+        persistenceSocket.set(zmq::sockopt::req_correlate, 1);
+        persistenceSocket.connect(ipPersistence);
+
+        zmq::socket_t workerSocket(context, zmq::socket_type::rep);
+        workerSocket.set(zmq::sockopt::linger, 0);
+        workerSocket.set(zmq::sockopt::rcvhwm, 1);
+        workerSocket.connect(WORKER_ENDPOINT);
+
+        while (true) {
+            zmq::multipart_t message;
+            if (!message.recv(workerSocket)) continue;
+
+            if (message.size() != 1 || message[0].size() != sizeof(Request)) {
+                sendResponse(workerSocket, "ERROR: Solicitud invalida");
+                continue;
+            }
+
+            Request request{};
+            std::memcpy(&request, message[0].data(), sizeof(request));
+            traceRequest(workerId, "Solicitud recibida", request);
+            const std::string response = processRequest(persistenceSocket, request);
+            sendResponse(workerSocket, response);
+            traceRequest(workerId, "Respuesta enviada al gestor", request, response.c_str());
+        }
+    } catch (const zmq::error_t &error) {
+        if (error.num() != ETERM) {
+            std::cerr << "[RMC] Error en trabajador: " << error.what() << '\n';
+            context.shutdown();
+        }
+    } catch (const std::exception &error) {
+        std::cerr << "[RMC] Error en trabajador: " << error.what() << '\n';
+        context.shutdown();
     }
-    
-    if (available < quantity) return "ERROR: Asientos insuficientes";
-
-    return "OK";
 }
 
-/* checkReservation
-Parametros de entrada: socket del zmq/persistencia (zmq), id de reserva (String), id del cliente (String)
-Parametros de salida: String
-Función: Genera la solicitud tipo CHECK_RESERVATION para comprobar la existencia de la reserva en la base de datos. Retorna el resultado que arroje el servicio de persistencia.
+/* main
+Parametros de entrada: número de argumentos (int), argumentos de ejecución (char**)
+Parametros de salida: 1 si ocurre un error, 0 en caso contrario
+Función: Vincula un ROUTER para los gestores y un DEALER interno para distribuir solicitudes entre los trabajadores.
+         Al cerrar el contexto, desbloquea los sockets de los trabajadores y espera la terminación de los hilos.
 */
-std::string checkReservation(zmq::socket_t &persistenceSocket, std::string reservationID, std::string clientID){
-    Request check_reservation{};
-    check_reservation.request = CHECK_RESERVATION;
-    copy(check_reservation.reservationID, reservationID);
-    copy(check_reservation.clientID, clientID);
-
-    return sendPersistence(persistenceSocket, check_reservation);
-}
-
-/* checkOccurrences
-Parametros de entrada: socket del zmq/persistencia (zmq), id de la ocurrencia (String), id del evento (String)
-Parametros de salida: String
-Función: Genera la solicitud tipo CHECK_OCCURRENCES para ver si existe la ocurrencia solicitada. Retorna el resultado que arroje el servicio de persistencia.
-*/
-std::string checkOccurrences(zmq::socket_t &persistenceSocket, std::string eventID, std::string occurrenceID){
-    Request check_occurrence{};
-    check_occurrence.request = CHECK_OCCURRENCES;
-    copy(check_occurrence.eventID, eventID);
-    copy(check_occurrence.occurrenceID, occurrenceID);
-
-    return sendPersistence(persistenceSocket, check_occurrence);
-}
-
-/* reserveSeats
-Parametros de entrada: socket del zmq/persistencia (zmq), id de la ocurrencia (String), id del evento (String), cantidad solicitada (int), id del cliente (String)
-Parametros de salida: String
-Función: Llama a la función checkSeats para saber si hay suficientes asientos, después genera la solicitud tipo RESERVE para enviarla al socket de persistencia y retornar su resultado.
-*/
-std::string reserveSeats (zmq::socket_t &persistenceSocket, std::string clientID, std::string eventID, std::string occurenceID, int quantity){
-    if (quantity <= 0) return "ERROR: Cantidad invalida";   
-
-    Request reserve{};
-    reserve.request = RESERVE;
-    copy(reserve.clientID, clientID);
-    copy(reserve.eventID, eventID);
-    copy(reserve.occurrenceID, occurenceID);
-    reserve.quantity = quantity;
-
-    return sendPersistence(persistenceSocket, reserve);
-}
-
-/* modifyQuantity
-Parametros de entrada: socket del zmq/persistencia (zmq), id del cliente (String), id de la reserva (String), nueva cantidad solicitada (int), id del evento (String), id de la ocurrencia (String)
-Parametros de salida: String
-Función: Valida que la nueva cantidad sea positiva, llama a checkReservation para comprobar la existencia de la reserva y obtener su cantidad actual,
-         y si la nueva cantidad es mayor, invoca a checkSeats con la diferencia (los asientos adicionales) para ver si hay cupo.
-         Finalmente genera la solicitud tipo MODIFY_QUANTITY para enviarla al socket de persistencia y retornar su resultado.
-*/
-std::string modifyQuantity (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID, int newQuantity, std::string eventID, std::string occurenceID){
-    if (newQuantity <= 0) return "ERROR: Cantidad invalida";
-
-    std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
-
-    int current;
-    try {
-        current = std::stoi(check_res);
-    }catch (...) {
-        return check_res;
-    }
-
-    int extra = newQuantity - current;
-    if (extra > 0){
-        std::string check_seats = checkSeats(persistenceSocket, eventID, occurenceID, extra);   // solo los asientos adicionales
-        if (check_seats != "OK") return check_seats;
-    }
-
-    Request modify{};
-    modify.request = MODIFY_QUANTITY;
-    copy(modify.clientID, clientID);
-    copy(modify.eventID, eventID);
-    copy(modify.occurrenceID, occurenceID);
-    modify.quantity = newQuantity;
-    copy(modify.reservationID, reservationID);
-
-    return sendPersistence(persistenceSocket, modify);
-}
-
-/* modifyOccurrence
-Parametros de entrada: socket del zmq/persistencia (zmq), id del cliente (String), id de la reserva (String), id del evento (String), id de la ocurrencia (String)
-Parametros de salida: String
-Función: Llama a la función checkReservation comprobar la existencia de la reserva, después invoca a checkOccurrences para verificar que exista la ocurrencia e 
-         invoca a checkSeats para verificar que hayan suficientes asientos disponibles en la nueva ocurrencia. Finalmente genera la solicitud de tipo MODIFY_OCCURRENCE para enviarla al servicio de persistencia y retornar su resultado.
-*/
-std::string modifyOccurrence (zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID, std::string eventID, std::string occurrenceID){
-    std::string check_res = checkReservation(persistenceSocket, reservationID, clientID);
-
-    int current;
-    try {
-        current = std::stoi(check_res);
-    }catch (...) {
-        return check_res;   
-    }
-
-    std::string check_occ = checkOccurrences(persistenceSocket, eventID, occurrenceID);
-    if(check_occ != "OK") return check_occ;
-
-    std::string check_seats = checkSeats(persistenceSocket, eventID, occurrenceID, current);
-    if (check_seats != "OK") return check_seats;
-
-    Request modify{};
-    modify.request = MODIFY_OCCURRENCE;
-    copy(modify.clientID, clientID);
-    copy(modify.reservationID, reservationID);
-    copy(modify.eventID, eventID);
-    copy(modify.occurrenceID, occurrenceID);
-
-    return sendPersistence(persistenceSocket, modify);
-}
-
-/* checkEvents
-Parametros de entrada: socket del zmq/persistencia (zmq), mes (String)
-Parametros de salida: String
-Función: Genera una solicitud tipo QUERY para enviarla al servicio de persistencia y retornar su resultado. 
-*/
-std::string checkEvents (zmq::socket_t &persistenceSocket, std::string month){
-    Request events{};
-    events.request = QUERY;
-    copy(events.month, month);
-
-    return sendPersistence(persistenceSocket, events);
-}
-
-int main(int argc, char *argv[]){
-
-    if(argc != 3){
-        std::cout<<"Error: Numero de argumentos incorrecto\n";
-        std::cout<<"Formato: "<<argv[0]<<" <ip-rmc> <ip-persistencia>\n";
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        std::cout << "Error: Numero de argumentos incorrecto\n";
+        std::cout << "Formato: " << argv[0] << " <ip-rmc> <ip-persistencia>\n";
         return 1;
     }
 
-    std::string ipRMC= "tcp://";
-    ipRMC +=argv[1];
-    ipRMC +=":7777";
+    const std::string ipRMC = std::string("tcp://") + argv[1] + ":7777";
+    const std::string ipPersistence = std::string("tcp://") + argv[2] + ":8888";
 
-    std::string ipPersistence= "tcp://";
-    ipPersistence+=argv[2];
-    ipPersistence+=":8888";
+    zmq::context_t context(1);
+    std::vector<std::thread> workers;
+    int status = 0;
 
+    try {
+        zmq::socket_t managerSocket(context, zmq::socket_type::router);
+        managerSocket.set(zmq::sockopt::linger, 0);
+        managerSocket.bind(ipRMC);
 
-    zmq::context_t contextZMQ(1);
-    zmq::socket_t managerSocket(contextZMQ, zmq::socket_type::rep);
-    managerSocket.bind(ipRMC);
+        zmq::socket_t distributor(context, zmq::socket_type::dealer);
+        distributor.set(zmq::sockopt::linger, 0);
+        distributor.set(zmq::sockopt::sndhwm, 1);
+        distributor.bind(WORKER_ENDPOINT);
 
-    zmq::socket_t persistenceSocket(contextZMQ, zmq::socket_type::req);
-    persistenceSocket.connect(ipPersistence);
-
-    while(true){
-        zmq::message_t managerRequest;
-
-        auto result = managerSocket.recv(managerRequest, zmq::recv_flags::none);
-
-        if(!result) continue;
-
-        if (managerRequest.size() != sizeof(Request)){
-            sendResponse(managerSocket, "ERROR: Solicitud invalida");
-            continue;
+        workers.reserve(RMC_WORKERS);
+        for (int i = 0; i < RMC_WORKERS; ++i) {
+            workers.emplace_back(runWorker, std::ref(context), std::cref(ipPersistence), i + 1);
         }
 
-        Request structuredRequest; 
-        memcpy(&structuredRequest, managerRequest.data(), sizeof(Request));
-
-        std::cout << "[RMC] Solicitud recibida: ";
-        printRequest(structuredRequest);
-
-        
-        std::string transactionResponse{};
-
-        switch(structuredRequest.request){
-            case RESERVE:
-                transactionResponse = reserveSeats(persistenceSocket, structuredRequest.clientID, 
-                        structuredRequest.eventID, structuredRequest.occurrenceID, structuredRequest.quantity);
-                break;
-
-            case MODIFY_OCCURRENCE:
-                transactionResponse = modifyOccurrence(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID,
-                        structuredRequest.eventID, structuredRequest.occurrenceID);
-                break;
-
-            case MODIFY_QUANTITY:
-                transactionResponse = modifyQuantity(persistenceSocket, structuredRequest.clientID, structuredRequest.reservationID, 
-                        structuredRequest.quantity, structuredRequest.eventID,structuredRequest.occurrenceID);
-                break;
-
-            case QUERY:
-                transactionResponse = checkEvents(persistenceSocket, structuredRequest.month);
-                break;
-
-            default:
-                transactionResponse = "ERROR: Solicitud desconocida";
-                break;
-        }
-
-        std::cout << "[RMC] Respuesta: " << transactionResponse << std::endl;
-
-        sendResponse(managerSocket, transactionResponse);
+        std::cout << "[RMC] Escuchando en " << ipRMC << " con " << RMC_WORKERS << " trabajadores" << std::endl;
+        zmq::proxy(managerSocket, distributor);
+    } catch (const std::exception &error) {
+        std::cerr << "[RMC] Error en distribuidor: " << error.what() << '\n';
+        status = 1;
     }
 
+    context.shutdown();
+    for (auto &worker : workers) {
+        worker.join();
+    }
+
+    return status;
 }
-
-
