@@ -106,11 +106,10 @@ Parametros de entrada: conexión con la db, id del cliente (String), id del even
 Parametros de salida: String (OK con el id de reserva si se pudo, error en caso contrario)
 Función: Revisa la disponibilidad de cupos de una ocurrencia en determinado evento y dependiendo de esta hace una reserva o no.
 */
-std::string reserveSeats(pqxx::connection& db, const std::string& clientID,
+std::string reserveSeats(pqxx::work& tx,, const std::string& clientID,
                          const std::string& eventID, const std::string& occurrenceID,
                          int quantity) {
     if (quantity <= 0) return err("cantidad invalida");
-    pqxx::work tx(db);
 
     auto upd = tx.exec_params
     (   "UPDATE event_occurrences SET occupied_seats = occupied_seats + $1 "
@@ -124,7 +123,6 @@ std::string reserveSeats(pqxx::connection& db, const std::string& clientID,
         occurrenceID, clientID, quantity);
     auto id = ins[0]["reservation_id"].as<std::string>();
 
-    tx.commit();
     return "OK:" + id;
 }
 
@@ -134,11 +132,10 @@ Parametros de entrada: conexión con la db, id de la reserva (String), id del cl
 Parametros de salida: String (OK si se pudo, Error si no)
 Función: Revisa si es posible cambiar la cantidad de asientos reservados en un pedido y realiza el cambio en caso de que sea posible. 
 */
-std::string modifyQuantity(pqxx::connection& db, const std::string& reservationID,
+std::string modifyQuantity(pqxx::work& tx,, const std::string& reservationID,
                            const std::string& clientID, const std::string& eventID,
                            const std::string& occurrenceID, int newQuantity) {
     if (newQuantity<=0) return err("cantidad invalida");
-    pqxx::work tx(db);
 
     auto cur =tx.exec_params(
         "SELECT r.seat_count FROM reservations r "
@@ -159,7 +156,6 @@ std::string modifyQuantity(pqxx::connection& db, const std::string& reservationI
     auto updR =tx.exec_params("UPDATE reservations SET seat_count = $2 WHERE reservation_id = $1", reservationID, newQuantity);
     if (updR.affected_rows()!=1) return err("no se pudo cambiar el numero de asientos");
 
-    tx.commit();
     return "OK";
 }
 
@@ -168,10 +164,9 @@ Parametros de entrada: conexión con la db, id de la reserva (String), id de la 
 Parametros de salida: String (OK si se pudo, Error si no)
 Función: Busca otras ocurrencias del mismo evento para poder cambiar los eventos de la ocurrencia actual a otra distinta.
 */
-std::string modifyOccurrence(pqxx::connection& db, const std::string& reservationID,
+std::string modifyOccurrence(pqxx::work& tx, const std::string& reservationID,
                              const std::string& clientID, const std::string& eventID,
                              const std::string& occurrenceID) {
-    pqxx::work tx(db);
 
     auto cur = tx.exec_params(
         "SELECT r.occurrence_id, r.seat_count FROM reservations r "
@@ -196,7 +191,6 @@ std::string modifyOccurrence(pqxx::connection& db, const std::string& reservatio
                    "WHERE occurrence_id = $2", seats, oldOcc); //OldOcc new seats
     tx.exec_params("UPDATE reservations SET occurrence_id = $2 WHERE reservation_id = $1", reservationID, occurrenceID); //new reservation Ocurrence
 
-    tx.commit();
     return "OK";
 }
 
@@ -205,9 +199,8 @@ Parametros de entrada: conexión con la db, id de la reserva (String), id del cl
 Parametros de salida: String (OK si se pudo, Error si no)
 Función: Verifica que la reserva exista, esté activa y pertenezca al cliente, libera los asientos ocupados en la ocurrencia correspondiente y cambia el estado de la reserva a CANCELLED.
 */
-std::string cancelReservation(pqxx::connection& db, const std::string& reservationID,
+std::string cancelReservation(pqxx::work& tx, const std::string& reservationID,
                               const std::string& clientID) {
-    pqxx::work tx(db);
 
     auto cur = tx.exec_params(
         "SELECT occurrence_id, seat_count FROM reservations "
@@ -232,9 +225,43 @@ std::string cancelReservation(pqxx::connection& db, const std::string& reservati
     if (updRes.affected_rows() != 1)
         return err("no se pudo cancelar la reserva");
 
-    tx.commit();
     return "OK";
 }
+
+
+std::string executeWrite(
+    pqxx::work& tx,
+    const Request& q
+) {
+    switch (q.request) {
+        case RESERVE:
+            return reserveSeats(
+                tx, q.clientID, q.eventID,
+                q.occurrenceID, q.quantity
+            );
+
+        case MODIFY_QUANTITY:
+            return modifyQuantity(
+                tx, q.reservationID, q.clientID,
+                q.eventID, q.occurrenceID, q.quantity
+            );
+
+        case MODIFY_OCCURRENCE:
+            return modifyOccurrence(
+                tx, q.reservationID, q.clientID,
+                q.eventID, q.occurrenceID
+            );
+
+        case CANCEL:
+            return cancelReservation(
+                tx, q.reservationID, q.clientID
+            );
+
+        default:
+            return err("Operacion no soportada");
+    }
+}
+
 
 /* parseMonth
 Parametros de entrada: mes (String), como número ("10") o como nombre en minúsculas ("octubre")
@@ -264,16 +291,6 @@ std::string attend(pqxx::connection& db, const Request& q) {
             return checkReservation(db, (q.reservationID), (q.clientID));
         case CHECK_OCCURRENCES:
             return checkOccurrence(db, (q.eventID), (q.occurrenceID));
-        case RESERVE:
-            return reserveSeats(db, (q.clientID), (q.eventID), (q.occurrenceID), q.quantity);
-        case MODIFY_QUANTITY:   
-            return modifyQuantity(db, (q.reservationID), (q.clientID),
-                                  (q.eventID), (q.occurrenceID), q.quantity);
-        case MODIFY_OCCURRENCE:
-            return modifyOccurrence(db, (q.reservationID), (q.clientID),
-                                    (q.eventID), (q.occurrenceID));
-        case CANCEL:
-            return cancelReservation(db, (q.reservationID), (q.clientID));
         case QUERY: {
             int month;
             try { month = parseMonth(q.month); }
@@ -286,8 +303,151 @@ std::string attend(pqxx::connection& db, const Request& q) {
     return err("solicitud desconocida");
 }
 
+template <size_t N>
+std::string boundedString(const char (&value)[N]) {
+    return std::string(value, strnlen(value, N));
+}
+
+bool validUUID(const std::string& id) {
+    if (id.size() != 36) return false;
+
+    for (size_t i = 0; i < id.size(); ++i) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (id[i] != '-') return false;
+        } else if (!std::isxdigit(
+            static_cast<unsigned char>(id[i])
+        )) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void appendField(
+    std::string& output,
+    const std::string& value
+) {
+    output += std::to_string(value.size());
+    output += ':';
+    output += value;
+}
+
+std::string requestFingerprint(const Request& q) {
+    std::string result;
+
+    appendField(result, std::to_string(static_cast<int>(q.request)));
+    appendField(result, boundedString(q.clientID));
+    appendField(result, boundedString(q.reservationID));
+    appendField(result, boundedString(q.eventID));
+    appendField(result, boundedString(q.occurrenceID));
+    appendField(result, std::to_string(q.quantity));
+
+    return result;
+}
+
 bool useReplica(const Request& request) {
     return request.request == QUERY;
+}
+
+bool isWriteOperation(const Request& q) {
+    switch (q.request) {
+        case RESERVE:
+        case MODIFY_QUANTITY:
+        case MODIFY_OCCURRENCE:
+        case CANCEL:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+
+std::string executeIdempotent(
+    pqxx::connection& db,
+    const Request& q
+) {
+    std::string requestId = boundedString(q.requestId);
+    std::string clientId = boundedString(q.clientID);
+
+    if (!validUUID(requestId)) {
+        return err("requestId invalido");
+    }
+
+    std::string fingerprint = requestFingerprint(q);
+    int operationType = static_cast<int>(q.request);
+
+    pqxx::work tx(db);
+
+    // Intentar reclamar el identificador.
+    auto inserted = tx.exec_params(
+        "INSERT INTO processed_requests "
+        "(request_id, client_id, operation_type, "
+        " request_fingerprint, response) "
+        "VALUES ($1::uuid, $2, $3, $4, '') "
+        "ON CONFLICT (request_id) DO NOTHING "
+        "RETURNING request_id",
+        requestId,
+        clientId,
+        operationType,
+        fingerprint
+    );
+
+    // La solicitud ya había sido registrada.
+    if (inserted.empty()) {
+        auto previous = tx.exec_params(
+            "SELECT client_id, operation_type, "
+            "request_fingerprint, response "
+            "FROM processed_requests "
+            "WHERE request_id = $1::uuid",
+            requestId
+        );
+
+        if (previous.empty()) {
+            throw std::runtime_error(
+                "No se encontro la solicitud registrada"
+            );
+        }
+
+        const auto& row = previous[0];
+
+        if (row["client_id"].as<std::string>() != clientId ||
+            row["operation_type"].as<int>() != operationType ||
+            row["request_fingerprint"].as<std::string>() != fingerprint) {
+
+            return err(
+                "requestId reutilizado con parametros diferentes"
+            );
+        }
+
+        std::string response = row["response"].as<std::string>();
+
+        std::cout << "[IDEMPOTENCIA] Solicitud repetida: "
+                  << requestId << '\n';
+
+        return response;
+    }
+
+    // Primera ejecución de esta solicitud.
+    std::string response = executeWrite(tx, q);
+
+    // Guardar el resultado en la misma transacción.
+    tx.exec_params(
+        "UPDATE processed_requests "
+        "SET response = $2 "
+        "WHERE request_id = $1::uuid",
+        requestId,
+        response
+    );
+
+    // Confirmar operación y respuesta conjuntamente.
+    tx.commit();
+
+    std::cout << "[IDEMPOTENCIA] Solicitud nueva: "
+              << requestId << '\n';
+
+    return response;
 }
 
 int main(int argc, char *argv[]) {
@@ -339,7 +499,11 @@ int main(int argc, char *argv[]) {
                 readReplica ? replicaConninfo : primaryConninfo;
 
             try {
-                resp = attend(*selectedDB, q);
+                if (isWriteOperation(q)) {
+                    resp = executeIdempotent(*primaryDB, q);
+                } else {
+                    resp = attend(*selectedDB, q);
+                }
             } catch (const pqxx::broken_connection&) {
                 selectedDB = std::make_unique<pqxx::connection>(conninfo);
 

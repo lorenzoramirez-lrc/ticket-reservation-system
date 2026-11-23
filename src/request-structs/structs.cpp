@@ -5,6 +5,7 @@ enum RequestType { RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, C
 
 struct Request {
     RequestType request;
+    char requestId[37];
     char clientID[32];
     char eventID[32];
     char occurrenceID[32];
