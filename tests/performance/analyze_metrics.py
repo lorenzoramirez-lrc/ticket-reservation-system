@@ -140,7 +140,7 @@ def process_single_run(
     run_dir: str,
     window_seconds: float = 180.0,
     global_gt_path: Optional[str] = None
-) -> List[Dict[str, Any]]:
+) -> List[Dict[str, any]]:
     """Procesa una única ejecución generando métricas para CONSULTA, RESERVA y TOTAL."""
     meta_path = os.path.join(run_dir, "metadata.json")
     meta = {}

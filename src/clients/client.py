@@ -15,7 +15,7 @@ from itertools import cycle
 import gevent
 from gevent.event import Event
 import zmq.green as zmq
-from locust import User, task, constant_throughput, events
+from locust import User, task, constant_throughput, events, constant
 from locust.exception import StopUser
 
 # Formato de Request (compatible con Request struct de C++)
@@ -460,7 +460,7 @@ class PerformanceUser(User):
     - Medición de latencia con time.perf_counter() de alta precisión.
     - Genera CSVs individuales (client_<clientID>.csv) procesables por analyze_metrics.py.
     """
-    wait_time = None
+    wait_time = constant(0)
 
     def on_start(self):
         global _SPAWNED_USERS, _COORDINATED_START, _EXPECTED_USERS
