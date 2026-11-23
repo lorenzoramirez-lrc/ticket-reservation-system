@@ -48,33 +48,4 @@ CREATE TABLE reservations (
         CHECK (status IN ('ACTIVE', 'CANCELLED'))
 );
 
--- INITIAL EVENTS WITH OCCURRENCES 
 
-INSERT INTO events (event_id, name)
-VALUES
-    ('E1', 'AVATAR'),
-    ('E2', 'FLOW');
-
-
-INSERT INTO event_occurrences (
-    occurrence_id,
-    event_id,
-    date_time,
-    capacity,
-    occupied_seats
-)
-VALUES
-    (
-        'E1-1',
-        'E1',
-        '2026-10-20 19:00:00',
-        100,
-        0
-    ),
-    (
-        'E2-1',
-        'E2',
-        '2026-10-25 19:00:00',
-        100,
-        0
-    );
