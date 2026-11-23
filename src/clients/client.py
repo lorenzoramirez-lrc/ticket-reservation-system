@@ -20,7 +20,10 @@ RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_R
 
 # Variables de entorno
 MANAGER_ADDR = os.environ.get("MANAGER_ADDR", "tcp://10.43.100.20:5555")
+BACKUP_MANAGER_ADDR = os.environ.get("BACKUP_MANAGER_ADDR", "tcp://10.43.100.20:5557")
 NOTIFICATION_ADDR = os.environ.get("NOTIFICATION_ADDR", "tcp://10.43.99.201:9999")
+REQUEST_TIMEOUT_MS = int(os.environ.get("REQUEST_TIMEOUT_MS", 2500))
+REQUEST_RETRIES = int(os.environ.get("REQUEST_RETRIES", 3))
 REQS_PER_MIN = float(os.environ.get("REQS_PER_MIN", 30))
 
 # Datos de carga (clientes, eventos, ocurrencias y meses), los mismos con los que se llena la BD
@@ -74,6 +77,8 @@ class BaseClient(User):
         self.ctx = zmq.Context()
         self.clientID = next(CLIENT_POOL)
         self.reservations = []
+        self.manager_addrs = [MANAGER_ADDR, BACKUP_MANAGER_ADDR]
+        self.current_manager = 0
         self._running = True
         self._connect()
         self._connect_notifications()
@@ -82,12 +87,22 @@ class BaseClient(User):
     # _connect
     # Parametros de entrada: ninguno
     # Parametros de salida: ninguno
-    # Función: Crea un socket REQ de ZeroMQ y lo conecta a la dirección del Gestor de Transacciones (MANAGER_ADDR).
+    # Función: Crea un socket REQ de ZeroMQ y lo conecta al Gestor de Transacciones activo (primario o secundario).
     # Con LINGER en 0, el socket se cierra sin esperar a que se envíen los mensajes pendientes.
     def _connect(self):
         self.sock = self.ctx.socket(zmq.REQ)
         self.sock.setsockopt(zmq.LINGER, 0)
-        self.sock.connect(MANAGER_ADDR)
+        self.sock.connect(self.manager_addrs[self.current_manager])
+
+    # _switch_manager
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Cierra el socket REQ actual (patrón Lazy Pirate) y reconecta alternando entre el gestor primario y el secundario.
+    def _switch_manager(self):
+        self.sock.close()
+        self.current_manager = (self.current_manager + 1) % len(self.manager_addrs)
+        print(f"[CLIENTE {self.clientID}] Failover -> reconectando a {self.manager_addrs[self.current_manager]}", flush=True)
+        self._connect()
 
     # _connect_notifications
     # Parametros de entrada: ninguno
@@ -132,19 +147,28 @@ class BaseClient(User):
     # _send
     # Parametros de entrada: mensaje de la solicitud en bytes, construido previamente con buildRequest
     # Parametros de salida: bytes (respuesta del Gestor de Transacciones)
-    # Función: Envía la solicitud al Gestor de Transacciones y espera la respuesta (patrón REQ/REP, la espera es bloqueante).
-    # Imprime mensajes de seguimiento al enviar y al recibir.
+    # Función: Envía la solicitud al Gestor de Transacciones con timeout (patrón Lazy Pirate para Binary Star).
+    # Si el gestor actual no responde dentro de REQUEST_TIMEOUT_MS, cierra el socket, cambia al gestor alterno y reintenta.
     def _send(self, data):
+        for attempt in range(REQUEST_RETRIES):
+            addr = self.manager_addrs[self.current_manager]
+            print(f"[CLIENTE {self.clientID}] Enviando {len(data)} bytes a {addr} (intento {attempt + 1}/{REQUEST_RETRIES})", flush=True)
 
-        print(f"[CLIENTE] Enviando {len(data)} bytes a {MANAGER_ADDR}", flush=True)
+            self.sock.send(data)
 
-        self.sock.send(data)
-        print("[CLIENTE] Solicitud enviada", flush=True)
+            poller = zmq.Poller()
+            poller.register(self.sock, zmq.POLLIN)
+            socks = dict(poller.poll(REQUEST_TIMEOUT_MS))
 
-        response = self.sock.recv()
+            if socks.get(self.sock) == zmq.POLLIN:
+                response = self.sock.recv()
+                print(f"[CLIENTE {self.clientID}] Respuesta recibida de {addr}", flush=True)
+                return response
 
-        print("[CLIENTE] Respuesta recibida", flush=True)
-        return response
+            print(f"[CLIENTE {self.clientID}] Timeout esperando respuesta de {addr}", flush=True)
+            self._switch_manager()
+
+        return b"ERROR: ningun gestor disponible"
 
     # _query
     # Parametros de entrada: ninguno
