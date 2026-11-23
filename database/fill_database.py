@@ -13,7 +13,7 @@ SEATS_PER_OCCURRENCE = 100
 YEAR = 2026
 
 # Número de cada mes, para armar la fecha de cada ocurrencia
-MONTH_NUMBERS = {"octubre": 10, "noviembre": 11, "diciembre": 12}
+MONTH_NUMBERS = {"enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12}
 
 # Archivo de datos de carga. La ruta se calcula a partir de la ubicación de este script,
 # así que no depende de la carpeta desde donde se ejecute
@@ -25,7 +25,7 @@ with open(DATA_FILE) as f:
 # Conexión con PostgreSQL (contenedor de Docker). La contraseña se lee de la variable de entorno DB_PASSWORD
 # y, si no está definida, usa la del docker-compose (root)
 conn = psycopg2.connect(
-    host="localhost",           
+    host="10.43.100.34",           
     port=5432,
     dbname="event-reservation",
     user="root",

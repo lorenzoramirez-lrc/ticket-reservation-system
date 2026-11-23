@@ -11,6 +11,8 @@ struct Request {
     char reservationID[32];
     int quantity;
     char month[16];
+    char runID[64];
+    char requestID[64];
 };
 
 
@@ -36,7 +38,10 @@ const char *requestTypeName(RequestType type) {
 
 void printRequest(const Request& r) {
     std::cout << "Request: " << requestTypeName(r.request)
-              << " | Client: " << r.clientID << '\n';
+              << " | Client: " << r.clientID;
+    if (r.runID[0] != '\0') std::cout << " | Run: " << r.runID;
+    if (r.requestID[0] != '\0') std::cout << " | ReqId: " << r.requestID;
+    std::cout << '\n';
 }
 
 
