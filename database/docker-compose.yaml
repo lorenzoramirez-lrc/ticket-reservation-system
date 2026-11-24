@@ -38,7 +38,7 @@ services:
     image: postgres:17
     container_name: ticket-reservation-postgres-replica
     restart: unless-stopped
-    user: replica
+    user: postgres 
     environment:
       PGDATA: /var/lib/postgresql/data
       REPLICATION_PASSWORD: root
