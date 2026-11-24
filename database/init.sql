@@ -57,4 +57,18 @@ CREATE TABLE IF NOT EXISTS processed_requests (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS reservation_modifications (
+    request_id UUID PRIMARY KEY,
+    reservation_id VARCHAR(50) NOT NULL,
+    client_id VARCHAR(100) NOT NULL,
+    operation_type VARCHAR(20) NOT NULL CHECK (operation_type IN ('MODIFY_QUANTITY', 'MODIFY_OCCURRENCE')),
+    previous_occurrence_id VARCHAR(50) NOT NULL,
+    new_occurrence_id VARCHAR(50) NOT NULL,
+    previous_seat_count INTEGER NOT NULL CHECK (previous_seat_count > 0),
+    new_seat_count INTEGER NOT NULL CHECK (new_seat_count > 0),
+    modified_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reservation_modifications_history
+    ON reservation_modifications (reservation_id, modified_at DESC);
 
