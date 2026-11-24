@@ -256,6 +256,7 @@ class BaseClient(ManagerFailover, User):
         self.notification_sock.setsockopt(zmq.LINGER, 0)
         self.notification_sock.setsockopt(zmq.IDENTITY, str(self.clientID).encode("utf-8"))
         self.notification_sock.connect(NOTIFICATION_ADDR)
+        print(f"[CLIENTE {self.clientID}] Canal de notificaciones: {NOTIFICATION_ADDR}", flush=True)
 
     # receive_notification
     # Parametros de entrada: ninguno
@@ -267,7 +268,9 @@ class BaseClient(ManagerFailover, User):
         while self._running:
             try:
                 notification = self.notification_sock.recv().decode(errors="replace")
-            except zmq.ZMQError:
+            except zmq.ZMQError as error:
+                if self._running:
+                    print(f"[CLIENTE {self.clientID}] Error recibiendo notificaciones: {error}", flush=True)
                 break
             self._handle_notification(notification)
 
@@ -699,4 +702,3 @@ class PerformanceUser(ManagerFailover, User):
 
         self.sock.close()
         self.ctx.term()
-

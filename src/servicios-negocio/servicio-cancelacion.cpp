@@ -8,6 +8,7 @@ Funciones: sendNotification, sendPersistence, checkReservation, cancelReservatio
 #include <cstring>
 #include <iostream>
 #include <zmq.hpp>
+#include <zmq_addon.hpp>
 #include "../request-structs/structs.cpp"
 
 constexpr int PERSISTENCE_SEND_TIMEOUT_MS = 100;
@@ -19,14 +20,23 @@ static std::string str(const char (&a)[N]) { return std::string(a, strnlen(a, N)
 /* sendNotification
 Parametros de entrada: socket ROUTER de notificaciones (zmq), id del cliente (String), mensaje de notificación (String)
 Parametros de salida: Ninguno
-Función: Envía una notificación asíncrona al cliente identificado por clientID mediante el socket ROUTER (frame de identidad + frame de contenido).
+Función: Envía la notificación al cliente por ROUTER sin bloquear. Registra si ZeroMQ acepta el mensaje
+         o si la ruta al cliente no está disponible.
 */
 void sendNotification(zmq::socket_t &notificationSocket, const std::string &clientID, const std::string &notification) {
-    zmq::message_t identity(clientID.data(), clientID.size());
-    zmq::message_t payload(notification.data(), notification.size());
-
-    notificationSocket.send(identity, zmq::send_flags::sndmore);
-    notificationSocket.send(payload, zmq::send_flags::none);
+    const zmq::const_buffer frames[] = {zmq::buffer(clientID), zmq::buffer(notification)};
+    try {
+        if (zmq::send_multipart(notificationSocket, frames, zmq::send_flags::dontwait)) {
+            std::cout << "[CANCELACION] Notificacion encolada para " << clientID
+                      << ": " << notification << std::endl;
+        } else {
+            std::cerr << "[CANCELACION] Cola de notificaciones llena para " << clientID
+                      << ": " << notification << std::endl;
+        }
+    } catch (const zmq::error_t &error) {
+        std::cerr << "[CANCELACION] No se pudo notificar a " << clientID
+                  << ": " << error.what() << " | " << notification << std::endl;
+    }
 }
 
 /* sendPersistence
@@ -107,7 +117,10 @@ int main(int argc, char *argv[]) {
     // Canal asíncrono de notificaciones hacia los Clientes (ROUTER/DEALER :9999)
     zmq::socket_t notificationSocket(contextZMQ, zmq::socket_type::router);
     notificationSocket.set(zmq::sockopt::linger, 0);
+    notificationSocket.set(zmq::sockopt::router_mandatory, 1);
     notificationSocket.bind(ipNotification);
+    std::cout << "[CANCELACION] Solicitudes en " << ipCancel
+              << " | Notificaciones en " << ipNotification << std::endl;
 
     // Canal síncrono con el Servicio de Persistencia (REQ/REP :8888) con timeouts y correlación
     zmq::socket_t persistenceSocket(contextZMQ, zmq::socket_type::req);
@@ -149,3 +162,4 @@ int main(int argc, char *argv[]) {
         sendNotification(notificationSocket, clientID, reservationID + "|" + cancelResponse);
     }
 }
+
