@@ -11,6 +11,7 @@ import random
 import struct
 import time
 from itertools import cycle
+from uuid import uuid4
 
 import gevent
 from gevent.event import Event
