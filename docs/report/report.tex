@@ -264,18 +264,6 @@ que incorporar mecanismos adicionales de concurrencia o replicación
 incrementaría la complejidad del sistema sin garantizar mejoras 
 significativas en su desempeño.
 
-\subsubsection{Procesamiento Concurrente}
-
-Para superar las limitaciones del procesamiento secuencial, se 
-incorporaron sockets Router y Dealer en el Gestor de Transacciones, 
-permitiendo mantener hasta 16 solicitudes pendientes hacia el 
-Servicio RMC sin bloquear la recepción de nuevas solicitudes. 
-Asimismo, los servicios RMC y Persistencia implementan grupos 
-de cuatro trabajadores (Thread Pools), utilizando un distribuidor 
-de solicitudes basado en el patrón Router/Dealer. Cada trabajador administra 
-sus propios sockets o conexiones a la base de datos, permitiendo 
-el procesamiento concurrente de las operaciones.
-
 
 \subsection{Implementación}
 
@@ -348,6 +336,17 @@ la misma máquina física, por lo que el mecanismo implementado proporciona
 tolerancia ante fallos de los procesos, más no ante fallos completos
 del nodo de ejecución.
 
+\subsubsection{Procesamiento Concurrente}
+
+Para superar las limitaciones del procesamiento secuencial, se 
+incorporaron sockets Router y Dealer en el Gestor de Transacciones, 
+permitiendo mantener hasta 16 solicitudes pendientes hacia el 
+Servicio RMC sin bloquear la recepción de nuevas solicitudes. 
+Asimismo, los servicios RMC y Persistencia implementan grupos 
+de cuatro trabajadores (Thread Pools), utilizando un distribuidor 
+de solicitudes basado en el patrón Router/Dealer. Cada trabajador administra 
+sus propios sockets o conexiones a la base de datos, permitiendo 
+el procesamiento concurrente de las operaciones.
 
 \subsection{Diagramas Arquitectura Final}
 
