@@ -259,7 +259,7 @@ std::string cancelReservation(pqxx::transaction_base& tx, const std::string& res
     if (updRes.affected_rows() != 1)
         return err("no se pudo cancelar la reserva");
 
-    return "OK";
+    return "***¡¡¡OK. CANCELACION REALIZADA EXITOSAMENTE!!!";
 }
 
 
