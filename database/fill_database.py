@@ -36,7 +36,7 @@ conn = psycopg2.connect(
 cur = conn.cursor()
 
 # Deja la BD en estado inicial: vacía las tres tablas a la vez
-cur.execute("TRUNCATE reservations, event_occurrences, events")
+cur.execute("TRUNCATE reservations, event_occurrences, events, proccesed_requests")
 
 # Inserta cada evento y sus ocurrencias. El evento va primero porque
 # la tabla event_occurrences tiene una llave foránea hacia events
