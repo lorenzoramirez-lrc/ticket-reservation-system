@@ -128,7 +128,7 @@ class ManagerFailover:
     # _switch_manager
     # Parametros de entrada: ninguno
     # Parametros de salida: ninguno
-    # Función: Cierra el socket REQ actual (patrón Lazy Pirate) y reconecta alternando entre el gestor primario y el secundario.
+    # Función: Cierra el socket REQ actual y reconecta alternando entre el gestor primario y el secundario.
     def _switch_manager(self):
         self.sock.close()
         self.current_manager = (self.current_manager + 1) % len(self.manager_addrs)
@@ -222,7 +222,7 @@ class BaseClient(ManagerFailover, User):
     # _send_async
     # Parametros de entrada: solicitud CANCEL empaquetada (bytes)
     # Parametros de salida: confirmación del gestor (bytes)
-    # Función: Envía la cancelación por el canal DEALER/ROUTER (:5556/:5558) con timeout y failover Lazy Pirate.
+    # Función: Envía la cancelación por el canal DEALER/ROUTER (:5556/:5558) con timeout y failover.
     def _send_async(self, data):
         for attempt in range(REQUEST_RETRIES):
             addr = self.async_manager_addrs[self.current_async_manager]
