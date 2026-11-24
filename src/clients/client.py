@@ -19,7 +19,7 @@ from locust import User, task, constant_throughput, events, constant
 from locust.exception import StopUser
 
 # Formato de Request (compatible con Request struct de C++)
-FORMAT = "<i32s32s32s32si16s64s64s"
+FORMAT = "<i37s32s32s32s32s3xi16s64s64s"
 RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_RESERVATION, CHECK_OCCURRENCES = range(8)
 
 # Variables de entorno
@@ -73,20 +73,28 @@ _EXPECTED_USERS = PERF_SCENARIOS.get(str(SCENARIO), PERF_SCENARIOS["1"])["client
 
 
 # buildRequest
-# Parametros de entrada: tipo de solicitud, IDs de cliente, evento, ocurrencia y reservación, cantidad de asientos y mes
-# Estos parametros (excepto tipo) son opcionales porque no todas las solicitudes usan los mismos parametros, asi que al inicializarlos
-# en 0 o strings "vacios" en la firma de la función, se asignan como valores por defecto si no se colocan al llamar la función
-# Parametros de salida: bytes (mensaje binario de 152 bytes, con el mismo formato del struct Request de C++)
-# Función: Construye el mensaje de una solicitud empaquetando sus parámetros con el formato binario del struct Request.
-# Cada texto se trunca a (tamaño - 1) bytes para que siempre quede un '\0' al final, y los campos que no se usan quedan vacíos.
+# Parametros de entrada: tipo de solicitud, IDs de cliente, evento, ocurrencia y reserva, cantidad, mes,
+# identificador de ejecución (runID) e identificador de métricas (requestID).
+# Parametros de salida: bytes (solicitud binaria de 320 bytes, compatible con el struct Request de C++).
+# Función: Genera el UUID requestId de la operación y lo empaqueta junto con los demás campos.
+# Cada texto deja espacio para el terminador nulo. Los reintentos reenvían los mismos bytes y el mismo UUID.
 def buildRequest(type, clientID="", eventID="", occurrenceID="", reservationID="", quantity=0, month="", runID="", requestID=""):
     def field(text, size):
         return text.encode()[:size - 1]
 
-    return struct.pack(FORMAT, type, field(clientID, 32), field(eventID, 32), field(occurrenceID, 32),
-                       field(reservationID, 32), quantity, field(month, 16),
-                       field(runID, 64), field(requestID, 64))
-
+    return struct.pack(
+        FORMAT,
+        type,
+        field(str(uuid4()), 37),
+        field(clientID, 32),
+        field(eventID, 32),
+        field(occurrenceID, 32),
+        field(reservationID, 32),
+        quantity,
+        field(month, 16),
+        field(runID, 64),
+        field(requestID, 64),
+    )
 
 # Clase abstracta BaseClient
 # Contiene los metodos por defecto del cliente
@@ -193,12 +201,11 @@ class BaseClient(User):
         self.ctx.term()
         
 
-
     # _send
     # Parametros de entrada: mensaje de la solicitud en bytes, construido previamente con buildRequest
     # Parametros de salida: bytes (respuesta del Gestor de Transacciones)
     # Función: Envía la solicitud al Gestor de Transacciones con timeout (patrón Lazy Pirate para Binary Star).
-    # Si el gestor actual no responde dentro de REQUEST_TIMEOUT_MS, cierra el socket, cambia al gestor alterno y reintenta.
+    # Si vence REQUEST_TIMEOUT_MS, cambia al gestor alterno y reenvía los mismos bytes para conservar requestId.
     def _send(self, data):
         for attempt in range(REQUEST_RETRIES):
             addr = self.manager_addrs[self.current_manager]
@@ -219,6 +226,7 @@ class BaseClient(User):
             self._switch_manager()
 
         return b"ERROR: ningun gestor disponible"
+
 
     # _query
     # Parametros de entrada: ninguno
