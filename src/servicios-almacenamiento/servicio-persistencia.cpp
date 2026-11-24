@@ -1,7 +1,7 @@
 /*
 Archivo: servicio-persistencia.cpp
 Objetivo: Atender solicitudes concurrentes de RMC y Cancelación con conexiones a PostgreSQL exclusivas de cada trabajador.
-Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, modifyQuantity, modifyOccurrence, cancelReservation, executeIdempotent, processRequest, runWorker, main
+Funciones: sendResponse, checkSeats, checkReservation, checkOccurrence, queryEvents, reserveSeats, recordModification, modifyQuantity, modifyOccurrence, cancelReservation, executeIdempotent, processRequest, runWorker, main
 */
 
 #include <cerrno>
@@ -148,14 +148,34 @@ std::string reserveSeats(pqxx::transaction_base& tx, const std::string& clientID
 }
 
 
+/* recordModification
+Parametros de entrada: transacción de PostgreSQL (transaction_base), UUID de la solicitud (String),
+                      id de reserva y cliente (String), tipo de operación (RequestType),
+                      ocurrencias anterior y nueva (String), cantidades anterior y nueva (int)
+Parametros de salida: Ninguno
+Función: Guarda los valores anteriores y nuevos en el historial usando la misma transacción que modifica la reserva.
+*/
+static void recordModification(pqxx::transaction_base& tx, const std::string& requestId,
+                               const std::string& reservationID, const std::string& clientID,
+                               RequestType operation, const std::string& previousOccurrence,
+                               const std::string& newOccurrence, int previousSeats, int newSeats) {
+    tx.exec_params(
+        "INSERT INTO reservation_modifications "
+        "(request_id, reservation_id, client_id, operation_type, previous_occurrence_id, "
+        "new_occurrence_id, previous_seat_count, new_seat_count) "
+        "VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)",
+        requestId, reservationID, clientID, requestTypeName(operation), previousOccurrence,
+        newOccurrence, previousSeats, newSeats);
+}
+
 /* modifyQuantity
-Parametros de entrada: transacción de PostgreSQL (transaction_base), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String), nueva cantidad de asientos (int)
+Parametros de entrada: transacción de PostgreSQL (transaction_base), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String), nueva cantidad de asientos (int), UUID de la solicitud (String)
 Parametros de salida: String (OK si se pudo, Error si no)
-Función: Revisa si es posible cambiar la cantidad de asientos reservados en un pedido y realiza el cambio en caso de que sea posible. 
+Función: Cambia la cantidad si hay cupo y registra la modificación en el historial.
 */
 std::string modifyQuantity(pqxx::transaction_base& tx, const std::string& reservationID,
                            const std::string& clientID, const std::string& eventID,
-                           const std::string& occurrenceID, int newQuantity) {
+                           const std::string& occurrenceID, int newQuantity, const std::string& requestId) {
     if (newQuantity<=0) return err("cantidad invalida");
 
     auto cur =tx.exec_params(
@@ -165,7 +185,8 @@ std::string modifyQuantity(pqxx::transaction_base& tx, const std::string& reserv
         "  AND r.occurrence_id = $3 AND o.event_id = $4 FOR UPDATE OF r", reservationID, clientID, occurrenceID, eventID);
     if (cur.empty()) return err("la reserva no existe, esta cancelada o no coincide");
 
-    int diff =newQuantity-cur[0]["seat_count"].as<int>();
+    const int previousSeats = cur[0]["seat_count"].as<int>();
+    const int diff = newQuantity - previousSeats;
     if (diff==0) return err("No se modifico el numero de asientos");
 
     auto upd =tx.exec_params(
@@ -177,17 +198,19 @@ std::string modifyQuantity(pqxx::transaction_base& tx, const std::string& reserv
     auto updR =tx.exec_params("UPDATE reservations SET seat_count = $2 WHERE reservation_id = $1", reservationID, newQuantity);
     if (updR.affected_rows()!=1) return err("no se pudo cambiar el numero de asientos");
 
+    recordModification(tx, requestId, reservationID, clientID, MODIFY_QUANTITY,
+                       occurrenceID, occurrenceID, previousSeats, newQuantity);
     return "OK";
 }
 
 /* modifyOccurrence
-Parametros de entrada: transacción de PostgreSQL (transaction_base), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String)
+Parametros de entrada: transacción de PostgreSQL (transaction_base), id de la reserva (String), id del cliente (String), id del evento (String), id de la ocurrencia (String), UUID de la solicitud (String)
 Parametros de salida: String (OK si se pudo, Error si no)
-Función: Mueve la reserva entre ocurrencias del evento. Bloquea ambas por ID ascendente para evitar interbloqueos cuando dos operaciones mueven reservas en sentidos opuestos.
+Función: Mueve la reserva entre ocurrencias del evento y registra el cambio. Bloquea ambas ocurrencias por ID ascendente para evitar interbloqueos.
 */
 std::string modifyOccurrence(pqxx::transaction_base& tx, const std::string& reservationID,
                              const std::string& clientID, const std::string& eventID,
-                             const std::string& occurrenceID) {
+                             const std::string& occurrenceID, const std::string& requestId) {
 
     auto cur = tx.exec_params(
         "SELECT r.occurrence_id, r.seat_count FROM reservations r "
@@ -225,6 +248,8 @@ std::string modifyOccurrence(pqxx::transaction_base& tx, const std::string& rese
         reservationID, occurrenceID);
     if (move.affected_rows() != 1) return err("no se pudo cambiar la ocurrencia de la reserva");
 
+    recordModification(tx, requestId, reservationID, clientID, MODIFY_OCCURRENCE,
+                       oldOcc, occurrenceID, seats, seats);
     return "OK";
 }
 
@@ -282,13 +307,13 @@ std::string executeWrite(
         case MODIFY_QUANTITY:
             return modifyQuantity(
                 tx, q.reservationID, q.clientID,
-                q.eventID, q.occurrenceID, q.quantity
+                q.eventID, q.occurrenceID, q.quantity, q.requestId
             );
 
         case MODIFY_OCCURRENCE:
             return modifyOccurrence(
                 tx, q.reservationID, q.clientID,
-                q.eventID, q.occurrenceID
+                q.eventID, q.occurrenceID, q.requestId
             );
 
         case CANCEL:
