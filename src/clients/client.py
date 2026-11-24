@@ -26,10 +26,13 @@ RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_R
 # Variables de entorno
 MANAGER_ADDR = os.environ.get("MANAGER_ADDR", "tcp://10.43.100.20:5555")
 BACKUP_MANAGER_ADDR = os.environ.get("BACKUP_MANAGER_ADDR", "tcp://10.43.100.20:5557")
+ASYNC_MANAGER_ADDR = os.environ.get("ASYNC_MANAGER_ADDR", "tcp://10.43.100.20:5556")
+BACKUP_ASYNC_MANAGER_ADDR = os.environ.get("BACKUP_ASYNC_MANAGER_ADDR", "tcp://10.43.100.20:5558")
 NOTIFICATION_ADDR = os.environ.get("NOTIFICATION_ADDR", "tcp://10.43.99.201:9999")
 REQUEST_TIMEOUT_MS = int(os.environ.get("REQUEST_TIMEOUT_MS", 2500))
 REQUEST_RETRIES = int(os.environ.get("REQUEST_RETRIES", 3))
 REQS_PER_MIN = float(os.environ.get("REQS_PER_MIN", 30))
+
 
 # Datos de carga (clientes, eventos, ocurrencias y meses), los mismos con los que se llena la BD
 with open(os.path.join(os.path.dirname(__file__), "load_data.json")) as f:   
@@ -182,8 +185,65 @@ class BaseClient(ManagerFailover, User):
         self.pending_cancellations = {}
         self._running = True
         self._connect_managers()
+        self._connect_async_managers()
         self._connect_notifications()
         self._notification_greenlet = gevent.spawn(self.receive_notification)
+
+    # _connect_async_managers
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Configura los endpoints asíncronos (DEALER/ROUTER :5556 y :5558) del gestor primario y secundario.
+    def _connect_async_managers(self):
+        self.async_manager_addrs = [ASYNC_MANAGER_ADDR, BACKUP_ASYNC_MANAGER_ADDR]
+        self.current_async_manager = 0
+        self._connect_async()
+
+    # _connect_async
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Crea un socket DEALER de ZeroMQ conectado al canal asíncrono de cancelaciones del Gestor de Transacciones.
+    def _connect_async(self):
+        self.async_sock = self.ctx.socket(zmq.DEALER)
+        self.async_sock.setsockopt(zmq.LINGER, 0)
+        self.async_sock.setsockopt(zmq.SNDTIMEO, REQUEST_TIMEOUT_MS)
+        self.async_sock.setsockopt(zmq.IDENTITY, str(self.clientID).encode("utf-8"))
+        self.async_sock.connect(self.async_manager_addrs[self.current_async_manager])
+
+    # _switch_async_manager
+    # Parametros de entrada: ninguno
+    # Parametros de salida: ninguno
+    # Función: Cierra el socket DEALER actual y reconecta alternando entre el gestor primario (:5556) y el secundario (:5558).
+    def _switch_async_manager(self):
+        self.async_sock.close()
+        self.current_async_manager = (self.current_async_manager + 1) % len(self.async_manager_addrs)
+        print(f"[CLIENTE {self.clientID}] Failover asincrono -> reconectando a {self.async_manager_addrs[self.current_async_manager]}", flush=True)
+        self._connect_async()
+
+    # _send_async
+    # Parametros de entrada: solicitud CANCEL empaquetada (bytes)
+    # Parametros de salida: confirmación del gestor (bytes)
+    # Función: Envía la cancelación por el canal DEALER/ROUTER (:5556/:5558) con timeout y failover Lazy Pirate.
+    def _send_async(self, data):
+        for attempt in range(REQUEST_RETRIES):
+            addr = self.async_manager_addrs[self.current_async_manager]
+            if self.verbose_transport:
+                print(f"[CLIENTE {self.clientID}] Enviando cancelacion ({len(data)} bytes) a {addr} "
+                      f"(intento {attempt + 1}/{REQUEST_RETRIES})", flush=True)
+
+            try:
+                self.async_sock.send(data)
+                if self.async_sock.poll(REQUEST_TIMEOUT_MS, zmq.POLLIN) & zmq.POLLIN:
+                    response = self.async_sock.recv()
+                    if response != b"ERROR: gestor en modo pasivo":
+                        if self.verbose_transport:
+                            print(f"[CLIENTE {self.clientID}] Confirmacion asincrona recibida de {addr}", flush=True)
+                        return response
+            except zmq.Again:
+                pass
+
+            self._switch_async_manager()
+
+        return b"ERROR: ningun gestor disponible"
 
     # _connect_notifications
     # Parametros de entrada: ninguno
@@ -241,6 +301,7 @@ class BaseClient(ManagerFailover, User):
         if getattr(self, "_notification_greenlet", None):
             self._notification_greenlet.kill(block=False)
         self.notification_sock.close()
+        self.async_sock.close()
         self.sock.close()
         self.ctx.term()
         
@@ -339,7 +400,7 @@ class BaseClient(ManagerFailover, User):
         self.reservations.remove(res)
         self.pending_cancellations[res["id"]] = res
 
-        response = self._send(buildRequest(CANCEL, self.clientID, reservationID=res["id"])).decode(errors="replace")
+        response = self._send_async(buildRequest(CANCEL, self.clientID, reservationID=res["id"])).decode(errors="replace")
 
         if response.startswith("ERROR"):
             self.pending_cancellations.pop(res["id"], None)

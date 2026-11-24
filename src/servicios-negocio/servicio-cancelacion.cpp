@@ -10,6 +10,9 @@ Funciones: sendNotification, sendPersistence, checkReservation, cancelReservatio
 #include <zmq.hpp>
 #include "../request-structs/structs.cpp"
 
+constexpr int PERSISTENCE_SEND_TIMEOUT_MS = 100;
+constexpr int PERSISTENCE_RECV_TIMEOUT_MS = 1500;
+
 template <size_t N>
 static std::string str(const char (&a)[N]) { return std::string(a, strnlen(a, N)); }
 
@@ -29,12 +32,12 @@ void sendNotification(zmq::socket_t &notificationSocket, const std::string &clie
 /* sendPersistence
 Parametros de entrada: socket del zmq/persistencia (zmq), solicitud (Request)
 Parametros de salida: String
-Función: Copia los datos de la solicitud, los envía al servicio de persistencia y retorna la respuesta recibida.
+Función: Copia los datos de la solicitud, los envía al servicio de persistencia respetando los timeouts del socket y retorna la respuesta recibida.
 */
 std::string sendPersistence(zmq::socket_t &persistenceSocket, const Request &req) {
-    zmq::message_t message(sizeof(Request));
-    memcpy(message.data(), &req, sizeof(Request));
-    persistenceSocket.send(message, zmq::send_flags::none);
+    if (!persistenceSocket.send(zmq::buffer(&req, sizeof(req)), zmq::send_flags::none)) {
+        return "ERROR: sin respuesta de persistencia";
+    }
 
     zmq::message_t response;
     auto result = persistenceSocket.recv(response, zmq::recv_flags::none);
@@ -58,18 +61,20 @@ std::string checkReservation(zmq::socket_t &persistenceSocket, std::string reser
 }
 
 /* cancelReservation
-Parametros de entrada: socket del zmq/persistencia (zmq), id del cliente (String), id de la reserva (String)
+Parametros de entrada: socket del zmq/persistencia (zmq), solicitud original (Request)
 Parametros de salida: String
-Función: Genera la solicitud de tipo CANCEL y la envía al servicio de persistencia, que en una sola transacción verifica que la reserva exista,
-         esté activa y pertenezca al cliente, libera sus asientos y la marca como cancelada. Retorna el resultado de persistencia.
+Función: Preserva el requestId (UUID de idempotencia) y demás metadatos de la solicitud original, asegura la terminación nula
+         de los campos y la envía al servicio de persistencia para ejecutar la cancelación atómica.
 */
-std::string cancelReservation(zmq::socket_t &persistenceSocket, std::string clientID, std::string reservationID) {
-    Request cancel{};
-    cancel.request = CANCEL;
-    copy(cancel.clientID, clientID);
-    copy(cancel.reservationID, reservationID);
+std::string cancelReservation(zmq::socket_t &persistenceSocket, Request request) {
+    request.request = CANCEL;
+    request.requestId[sizeof(request.requestId) - 1] = '\0';
+    request.clientID[sizeof(request.clientID) - 1] = '\0';
+    request.reservationID[sizeof(request.reservationID) - 1] = '\0';
+    request.runID[sizeof(request.runID) - 1] = '\0';
+    request.requestID[sizeof(request.requestID) - 1] = '\0';
 
-    return sendPersistence(persistenceSocket, cancel);
+    return sendPersistence(persistenceSocket, request);
 }
 
 int main(int argc, char *argv[]) {
@@ -96,14 +101,22 @@ int main(int argc, char *argv[]) {
 
     // Canal asíncrono con el Gestor de Transacciones (PUSH/PULL :6666)
     zmq::socket_t managerSocket(contextZMQ, zmq::socket_type::pull);
+    managerSocket.set(zmq::sockopt::linger, 0);
     managerSocket.bind(ipCancel);
 
     // Canal asíncrono de notificaciones hacia los Clientes (ROUTER/DEALER :9999)
     zmq::socket_t notificationSocket(contextZMQ, zmq::socket_type::router);
+    notificationSocket.set(zmq::sockopt::linger, 0);
     notificationSocket.bind(ipNotification);
 
-    // Canal síncrono con el Servicio de Persistencia (REQ/REP :8888)
+    // Canal síncrono con el Servicio de Persistencia (REQ/REP :8888) con timeouts y correlación
     zmq::socket_t persistenceSocket(contextZMQ, zmq::socket_type::req);
+    persistenceSocket.set(zmq::sockopt::linger, 0);
+    persistenceSocket.set(zmq::sockopt::immediate, 1);
+    persistenceSocket.set(zmq::sockopt::sndtimeo, PERSISTENCE_SEND_TIMEOUT_MS);
+    persistenceSocket.set(zmq::sockopt::rcvtimeo, PERSISTENCE_RECV_TIMEOUT_MS);
+    persistenceSocket.set(zmq::sockopt::req_relaxed, 1);
+    persistenceSocket.set(zmq::sockopt::req_correlate, 1);
     persistenceSocket.connect(ipPersistence);
 
     while (true) {
@@ -127,7 +140,7 @@ int main(int argc, char *argv[]) {
         std::string cancelResponse{};
 
         if (structuredRequest.request == RequestType::CANCEL) {
-            cancelResponse = cancelReservation(persistenceSocket, clientID, reservationID);
+            cancelResponse = cancelReservation(persistenceSocket, structuredRequest);
         } else {
             cancelResponse = "ERROR: Solicitud desconocida para servicio de cancelacion";
         }

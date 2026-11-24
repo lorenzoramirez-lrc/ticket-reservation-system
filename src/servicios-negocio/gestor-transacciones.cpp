@@ -34,7 +34,7 @@ Funciones: stateName, classifyStatus, requestCode, traceRequest, logTransaction,
 constexpr int HEARTBEAT_MS   = 1000;
 constexpr int PEER_EXPIRY_MS = 2000;
 constexpr int RMC_TIMEOUT_MS = 2000;
-constexpr std::size_t MAX_PENDING_RMC = 4;
+constexpr std::size_t MAX_PENDING_RMC = 16;
 
 using Clock = std::chrono::steady_clock;
 
