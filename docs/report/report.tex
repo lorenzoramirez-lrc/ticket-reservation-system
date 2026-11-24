@@ -24,7 +24,7 @@
     Introducción Sistemas Distribuidos \\
     Mariela Curiel Huerfano \\ 
     Bogota, Colombia \\
-    12 de octubre, 2026
+    23 de noviembre, 2026
 }
 
 \author{}
@@ -32,17 +32,22 @@
 \maketitle
 
 \section{Introducción}
-El presente documento describe el diseño e implementación de un sistema distribuido para la gestión 
-de reservas de eventos, orientado al procesamiento concurrente de solicitudes de consulta, reserva, 
-modificación y cancelación. La arquitectura se organiza en capas y utiliza mecanismos de comunicación 
-síncrona y asíncrona mediante ZeroMQ, junto con PostgreSQL para la persistencia de la información.
+El presente documento describe el diseño e implementación de un sistema distribuido para la gestión de reservas de eventos, 
+orientado al procesamiento de solicitudes de consulta, reserva, modificación y cancelación. 
+La arquitectura se organiza en capas y utiliza mecanismos de comunicación síncrona y asíncrona mediante ZeroMQ, 
+junto con PostgreSQL para la persistencia de la información.
 
-Asimismo, se plantea una arquitectura escalable y tolerante a fallos, cuyas mejoras se evaluarán mediante 
-pruebas de carga y escenarios de interrupción de servicios. El análisis considera métricas como los tiempos 
-de respuesta, las transacciones por minuto y la capacidad de recuperación del sistema, con el propósito de 
-estudiar su comportamiento bajo diferentes condiciones de carga y fallo.
+Asimismo, se plantea una arquitectura escalable y tolerante a fallos, que incorpora mecanismos de concurrencia 
+y replicación, cuyas mejoras se evaluarán mediante pruebas de carga y escenarios de interrupción de servicios. 
+El análisis considera métricas como los tiempos de respuesta, las transacciones por minuto y la capacidad de 
+recuperación del sistema, con el propósito de estudiar su comportamiento bajo diferentes condiciones de carga y fallo.
+
 
 \section{Modelos del sistema}
+
+Los modelos presentados a continuación corresponden a la arquitectura base del sistema, 
+desarrollada durante la primera entrega. Esta arquitectura constituye el punto de partida para la incorporación 
+de los mecanismos de escalabilidad y tolerancia a fallos descritos posteriormente.
 
 \subsection{Arquitectonico}
 El sistema implementa un modelo arquitectónico por capas, contando con un total de 3 capas. 
@@ -62,32 +67,34 @@ solicitudes de escritura y lectura de ambos servicios de procesamiento.
 
 \subsection{Interacción}
 
-El sistema es un sistema distribuido asincrónico debido a que no hay limitaciones en los tiempos de ejecución de
-procesos del sistema ni en los retardos en transmisión de mensajes. Del mismo modo, no se asumen límites conocidos en las tasas de deriva
-de los relojes locales de cada proceso. Esta decisión refleja la naturaleza inherentemente impredecible de la red y los sistemas
-distribuidos, esto permite que el diseño posea una mejor tolerancia a fallos y escalabilidad al no depender de restricciones
-temporales estrictas en los componentes.
+El sistema se considera un sistema distribuido síncrono, debido a que sus componentes se ejecutarán dentro de una red de área local (LAN), 
+lo que permite establecer límites conocidos para los tiempos de ejecución de los procesos y los retardos en la transmisión de mensajes. 
+Este modelo facilita la implementación de mecanismos de detección y recuperación ante fallos mediante el uso de tiempos de espera 
+(timeouts), los cuales serán definidos en la siguiente etapa del desarrollo. 
+De esta manera, se busca mejorar la tolerancia a fallos del sistema mediante restricciones temporales que permitan identificar 
+posibles anomalías en la comunicación o ejecución.
 
 La interacción en relación con el envío de mensajes utiliza mecanismos de comunicación acoplados y desacoplados en el
 tiempo e inicialmente acoplados en el espacio. Este modelo de comunicación permite cumplir con los requerimientos del
 sistema en cuanto a las solicitudes de cancelación las cuales deben ser asíncronas (no bloqueantes) y el
 resto de transacciones de reserva de eventos las cuales son síncronas al esperar la confirmación de las capas subsecuentes.
 La arquitectura inicial es acoplada en el espacio dado que los servicios se encuentran direccionados directamente y cada uno
-cuenta con una sola réplica. Este acoplamiento temporal será reducido posteriormente al considerar componentes de
-escalabilidad y tolerancia a fallos, puesto que las solicitudes serán distribuidas a través de diferentes instancias de los servicios.
+cuenta con una sola réplica. 
 
 
 \subsection{Fallos}
 
 El modelo de fallos contempla tanto fallos en la red como en cada uno de los procesos del sistema. Al ser un sistema
-con un modelo de interacción asincrónico, no existen límites superiores conocidos para el tiempo de ejecución de procesos
-o envió y recepción de mensaje. Por lo anterior no se consideran fallos de prestaciones ni de tipo Fail/Stop, ya que no existe límites
-para determinar si un envio de mensaje o ejecucion ha fallado o se ha ejecutado con retraso.
+con un modelo de interacción síncrono, se establecerán límites superiores conocidos para el tiempo de ejecución de procesos
+y envió y recepción de mensaje. Por lo anterior, se consideran posibles fallos de prestaciones, 
+cuando un proceso o comunicación excede los límites temporales establecidos. 
 
-Por lo anterior el sistema considera principalmente fallos de ruptura y omisión.
-Los fallos de ruptura corresponden a situaciones en las que un proceso como el Gestor de Transacciones pueden fallar sin ser detectado por otros.
+El sistema considera principalmente fallos Fail/Stop y omisión.
+Los fallos de Fail/Stop corresponden a situaciones en las que un proceso como el Gestor de Transacciones falla y es detectado por otros.
 Por otro lado, los fallos de omisión contemplan situaciones en las que un mensaje no es enviado, se pierde durante la
 comunicación o no es recibido por su destinatario.
+Debido al modelo síncrono adoptado, será posible detectar la ausencia de respuestas dentro de los límites temporales establecidos, 
+facilitando la identificación de posibles fallos.
 
 Finalmente, se reconoce la posibilidad de fallos bizantinos en el sistema distribuido más el diseño no contempla la tolerancia a estos.
 Se trabaja bajo el supuesto de que un nodo al fallar no seguirá operando en vez de mostrar comportamiento aleatorio en su proceso o envió de mensajes.
@@ -95,17 +102,19 @@ Por lo anterior el manejo de excepciones se limita únicamente a fallos por omis
 
 \subsection{Seguridad}
 
-El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos. 
-En primer lugar, para la integridad de los datos, se buscará realizar consultas parametrizadas, práctica recurrente al momento de realizar operaciones con 
-una base de datos, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica. 
-Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente. 
-Sumado a esto, se validará el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se valida nuevamente en las operaciones la coherencia de los 
-datos que envía el cliente con la información registrada en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que 
-no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita 
-en el código. Finalmente, para la disponiblidad de los datos, se diseño el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no 
+El modelo de seguridad busca asegurar el cumplimiento de la triada de seguridad, es decir, la confidencialidad, integridad y disponibilidad de los datos.
+En primer lugar, para la integridad de los datos, se buscará realizar consultas parametrizadas, práctica recurrente al momento de realizar operaciones con
+una base de datos, además de que al momento de realizar cualquier cambio en la base de datos se validó que la operación fuera atómica.
+Las operaciones que modifican varias tablas se ejecutan dentro de una misma transacción de modo que si algo en la operación falla, la operación se deshace completamente.
+Sumado a esto, se validará el tamaño de las solicitudes para asegurar que sigan la estructura esperada, y se válida nuevamente en las operaciones la coherencia de los
+datos que envía el cliente con la información registrada en el sistema. Por otro lado, en el apartado de confidencialidad, se buscó un manejo de excepciones genérico que
+no mostrara al cliente información acerca de los datos. Asimismo se definieron variables de entorno para la manipulación de datos en lugar de dejarlo de forma explícita
+en el código. Finalmente, para la disponibilidad de los datos, se diseñó el sistema para recuperar la conexión con la persistencia de datos de modo que un posible fallo no
 intervenga con el funcionamiento del servicio.
 
-\section{Diseño del sistema}
+
+
+\section{Diseño de la Arquitectura Base}
 
 El diseño del sistema refleja la arquitectura base planteada. Este cumple con los requerimientos
 de despliegue físico y separación de responsabilidades permitiendo las diferentes interacciones que 
@@ -115,14 +124,15 @@ los clientes pueden tener con el servidor.
 
 El diagrama de despliegue (Fig. \ref{DiagramaDespliegue}) expone la distribución física del sistema a través de tres máquinas distintas cada
 una siendo una capa de la arquitectura del sistema. De este diagrama se debe destacar los protocolos de comunicación
-seleccionados teniendo en cuenta el modelo de comunicacion sincrónico y asincrónico del sistema. Para ello se utiliza el protocolo
+seleccionados teniendo en cuenta el modelo de comunicación sincrónico y asincrónico del sistema. Para ello se utiliza el protocolo
 sincrónico REQ/REP de ZeroMQ para todo el flujo de solicitudes sincrónicas. En el caso de cancelación el cual debe
 ser asincrónico para el cliente se manejan distintos protocolos teniendo en cuenta este requerimiento. El patron Router/Dealer es usado tanto para las
-llamadas al gestor de transacciones como el servicio de notificaciones de cancelacion al cliente. Se utiliza este patron asincronico debido 
-a la necesidad de que el servicio de cancelacion conozca el cliente que hizo la cancelacion y de esa manera pueda enviar de forma oportuna la notificacion.
-Ademas, se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional el cual va acorde con el flujo esperado 
-de la cancelacion. Tambien su control de flujo permite seguir enviando solicitudes de cancelacion a un buffer en caso que el servicio de cancelacion
-este procesando solicitudes lentamente.
+llamadas al gestor de transacciones como el servicio de notificaciones de cancelación al cliente. Se usa este patrón asincrónico debido
+a la necesidad de que el servicio de cancelación conozca el cliente que hizo la cancelación y de esa manera pueda enviar de forma oportuna la notificación.
+Además, se usa el patron Pull/Push para los llamados al servicio de cancelación por su comunicación unidireccional el cual va acorde con el flujo esperado
+de la cancelación. También su control de flujo permite seguir enviando solicitudes de cancelación a un buffer en caso de que el servicio de cancelación
+esté procesando solicitudes lentamente.
+
 
 \begin{figure}[htbp]
     \centerline{\includegraphics[width=\columnwidth]{despliegue.png}}
@@ -133,13 +143,13 @@ este procesando solicitudes lentamente.
 
 \subsection{Componentes}
 
-El diagrama de componentes (Fig. \ref{DiagramaComponentes}), expone la distribucion logica del sistema de reserva. 
+El diagrama de componentes (Fig. \ref{DiagramaComponentes}), expone la distribución lógica del sistema de reserva.
 En esta se evidencia las interfaces que expone cada uno de los componentes del sistema y sus respectivos consumidores.
-Estas siguen el flujo logico de los requerimientos del sistema, donde el cliente envia solicitudes al Gestor de Transacciones, 
-el cual redirige las las operaciones al Servicio de Cancelacion o RMC dependiendo del tipo de solicitud. 
-Ambos servicios utilizan la interfaz del servicio de persistencia para acceder a la informacion alamacenada de los eventos. 
-Finalmente, se evidencia la interfaz de notificacion expuesta por el cliente, la cual el servicio de cancelacion utiliza
-para enviar notificaciones de forma asincronica. 
+Estas siguen el flujo lógico de los requerimientos del sistema, donde el cliente envía solicitudes al Gestor de Transacciones,
+el cual redirige las operaciones al Servicio de Cancelación o RMC dependiendo del tipo de solicitud.
+Ambos servicios utilizan la interfaz del servicio de persistencia para acceder a la información almacenada de los eventos.
+Finalmente, se evidencia la interfaz de notificación expuesta por el cliente, la cual el servicio de cancelación utiliza
+para enviar notificaciones de forma asincrónica.
 
 La definición de los métodos correspondientes a cada una de las interfaces se presenta en el diagrama de 
 clases del sistema, donde se detallan las operaciones que ofrece cada interfaz y su respectiva implementación.
@@ -176,12 +186,14 @@ implementa el servicio correspondiente.
 El diagrama de secuencia muestra el comportamiento del sistema para llevar a cabo una operación, exponiendo la interacción
 entre los servicios del sistema y mostrando el orden de las interacciones para realizar un caso de uso.
 En este se evidencian los 3 componentes del sistema que se encargan de atender los casos de uso del usuario, de modo 
-en el que el Gestor de Transacciones será el único que se comunicará con el cliente, recibiendo las solicitudes y
-entregando los resultados que obtenga del servicio RMC. Por otro lado, el servicio RMC será el que defina la comunicación
+en el que el Gestor de Transacciones recibe las solicitudes y
+entrega los resultados que obtenga del servicio RMC. Por otro lado, el servicio RMC será el que defina la comunicación
 con el servicio de persistencia para atender la solicitud, además de que el resultado que obtenga del servicio será enviado
 al Gestor de Transacciones. El servicio de Persistencia será el encargado de realizar las operaciones correspondientes en
 la base de datos además de verificar que los datos que reciba del servicio RMC sean coherentes con los almacenados en el sistema
-y puedan ser resueltos.
+y puedan ser resueltos. Por otra parte, el Servicio de Cancelación 
+se comunica directamente con los clientes para notificar el 
+resultado de las cancelaciones.
 
 Los distintos casos de uso posibles de realizar por el sistema se aprecian en los diagramas de secuencia.
 
@@ -210,71 +222,241 @@ Los distintos casos de uso posibles de realizar por el sistema se aprecian en lo
 \end{figure}
 
 \section{Arquitectura Escalable}
-Para alcanzar una arquitectura del sistema más escalable y tolerante a fallos se añadirán diferentes componentes y
-herramientas para mejorar la arquitectura base propuesta. Considerando el diseño y requerimientos del sistema se determinó que
-los servicios más vulnerables a picos de solicitudes son servicio RMC y la única base de datos, también se considera importante
-mantener una alta disponibilidad del sistema dado el fallo del gestor de transacciones.
+A partir de las limitaciones identificadas en la arquitectura base, se incorporaron mecanismos de replicación,
+y recuperación ante fallos con el propósito de mejorar la capacidad de procesamiento, escalabilidad,
+y disponibilidad del sistema. En esta sección se presentan la propuesta hecha junto a sus justificaciones técnicas, la implementación de esta
+y los diagramas correspondientes a la arquitectura final.
 
-El servicio RMC maneja solicitudes de reserva, modificación y consulta, por lo que un aumento de solicitudes concurrentes puede
-incrementar la utilización de recursos y tiempo de respuesta debido a las operaciones que debe hacer al servicio de
-persistencia y acceso a la base de datos.
-Para mejorar la capacidad de procesamiento de este servicio se considera el despliegue de réplicas del servicio RMC junto
-a un balanceador de carga que distribuya las solicitudes mediante una política de Round Robin.
-Se decide mantener la comunicación síncrona en este componente puesto que al manejar solicitudes
-de reserva o modificación el cliente necesita saber el resultado de la operación antes de continuar el proceso.
+\subsection{Propuesta}
+Considerando el diseño y requerimientos del sistema se determinó que
+los aspectos más susceptibles a mejora son la única base de datos, y la existencia
+de un único Gestor de Transacciones como punto de entrada al sistema.
 
-Considerando la creación de réplicas del servicio RMC el cuello de botella del sistema se vería trasladado a la base de datos.
-Para distribuir la carga de solicitudes de disponibilidad de eventos, las cuales representaran una parte significativa de las solicitudes,
-se propone incorporar replicas destinadas a consultas de lectura manteniendo una única instancia primaria de escritura.
-Esta decisión de diseño implica que se debe considerar la falla de la instancia de escritura mediante la promoción de una
-réplica y la redirección de las conexiones hacia la nueva instancia primaria contemplando posibles retrasos en la propagación de información a
-las réplicas de lectura.
+Considerando que las consultas de disponibilidad de eventos representan una parte significativa de las solicitudes a la base de datos, se propone 
+implementar un esquema de replicación de PostgreSQL con una instancia primaria destinada a las operaciones de escritura y una réplica para 
+atender consultas de lectura. Esta estrategia busca distribuir la carga de operaciones sobre la base de datos y mejorar su capacidad de 
+respuesta. Sin embargo, debido a la replicación asíncrona, se reconoce la posibilidad de retrasos en la propagación de información, por lo 
+que las consultas realizadas sobre la réplica pueden presentar datos desactualizados. Las operaciones que requieren información consistente 
+para modificar reservas se realizarán sobre la instancia primaria, aprovechando las transacciones de PostgreSQL para preservar la integridad de 
+los datos.
 
-El gestor de transacciones al ser la frontera entre la capa de clientes y la capa de lógica de negocios tiene una importancia crítica
-y es un single point of failure en el sistema. Para no limitar la disponibilidad del sistema y mantener simple la coordinación entre clientes
-y el gestor de transacciones se implementará un mecanismo failover con una instancia del
-gestor preparada para asumir las funciones de la instancia primaria si esta falla. Este componente contemplará la redirección de solicitudes y
-recuperación de operaciones pendientes.
+El Gestor de Transacciones, al ser la frontera entre la capa de clientes 
+y la capa de lógica de negocio, tiene una importancia crítica y constituye 
+un Single Point of Failure en la arquitectura base. 
+Con el propósito de mejorar la disponibilidad del sistema y mantener 
+relativamente simple la coordinación entre los clientes y los gestores, 
+se propone implementar un mecanismo de recuperación ante fallos basado 
+en una configuración activo-pasivo, en la cual una instancia secundaria 
+estará preparada para asumir las funciones de la instancia activa en caso 
+de que esta falle.
 
-Por otra parte, el servicio de cancelación no tendrá ningún cambio en comparación con la arquitectura inicial.
-Esto decisión de diseño se toma teniendo en cuenta que el servicio de cancelación ya utiliza un modelo de comunicación asíncrono.
-Como se mencionó en el diagrama de despliegue el servicio de cancelación recibe las solicitudes a través del patrón Push/Pull el
-cual permite que el envío de mensajes esté desacoplado del procesamiento de este. Permitiendo que el servicio de cancelación procese las
-solicitudes a su propio ritmo. También es importante mencionar que dado
-los requerimientos que debe cumplir este nodo no se espera que tenga picos de tráfico a diferencia del Servicio RMC, puesto que la mayoría
-del tiempo los actores no estarán realizando solicitudes de cancelación. Por lo anterior se considera que añadir componentes de escalabilidad
-y tolerancia incrementaría la complejidad del sistema sin asegurar mejoras en el desempeño del servicio.
+La estrategia anterior estará acompañada de mecanismos de reconexión y reintento 
+por parte de los clientes. Asimismo, se incorporará un mecanismo de 
+idempotencia en el Servicio de Persistencia, con el propósito de evitar 
+que el reenvío de una solicitud previamente ejecutada produzca cambios 
+duplicados sobre la base de datos.
+
+Por otra parte, el Servicio de Cancelación conservará su modelo 
+de procesamiento asíncrono y secuencial. El patrón Push/Pull 
+permite desacoplar el envío de solicitudes de su procesamiento. 
+Dada la menor frecuencia esperada de cancelaciones, se considera 
+que incorporar mecanismos adicionales de concurrencia o replicación 
+incrementaría la complejidad del sistema sin garantizar mejoras 
+significativas en su desempeño.
+
+
+\subsection{Implementación}
+
+Para llevar a cabo la propuesta arquitectónica se realizaron modificaciones 
+sobre los patrones de comunicación, la organización interna de los servicios 
+y los mecanismos de acceso a la base de datos. Se procuró conservar la 
+separación de responsabilidades establecida en la arquitectura base.
+
+\subsubsection{Replicación de la Base de Datos}
+
+Para distribuir la carga de operaciones sobre la base de datos se 
+implementó un esquema de replicación Single-Leader, compuesto por una 
+instancia primaria y una instancia secundaria de PostgreSQL.
+
+La comunicación entre ambas instancias se realiza mediante el mecanismo 
+Physical Streaming Replication de PostgreSQL, utilizando los registros 
+Write-Ahead Log (WAL). Estos registros contienen la información necesaria 
+para reproducir los cambios realizados sobre la instancia primaria en 
+la instancia secundaria.
+
+Se optó por una replicación asíncrona, de manera que la confirmación 
+de las transacciones realizadas sobre la instancia primaria no dependa 
+de la confirmación de su aplicación en la réplica. Esta decisión busca 
+evitar que la latencia de replicación afecte directamente el tiempo de 
+respuesta de las operaciones de escritura.
+
+Como consecuencia de esta decisión, la instancia secundaria proporciona 
+un modelo de consistencia eventual, por lo que puede existir un intervalo 
+de tiempo durante el cual los cambios realizados sobre la instancia 
+primaria todavía no se encuentren disponibles en la réplica.
+
+Las operaciones de creación, modificación y cancelación de reservas, 
+junto con las consultas que requieren información actualizada para 
+validar operaciones de negocio, se realizan sobre la instancia primaria. 
+Por otra parte, las consultas generales de eventos se realizan sobre 
+la instancia secundaria.
+
+
+\subsubsection{Tolerancia a Fallos}
+
+Para mejorar la disponibilidad del Gestor de Transacciones se implementó
+el patrón Binary Star de ZeroMQ, el cual establece una configuración
+activo-pasivo mediante dos instancias del mismo servicio.
+
+Ambas instancias mantienen una comunicación periódica mediante el
+patrón Publish/Subscribe, intercambiando mensajes de Heartbeat que
+permiten conocer el estado de su contraparte. Para coordinar el
+comportamiento de los gestores se implementó una máquina de estados
+finitos compuesta por los estados PRIMARY, BACKUP, ACTIVE y PASSIVE.
+
+Durante el funcionamiento normal del sistema, una de las instancias
+permanece activa y se encarga de atender las solicitudes de los clientes,
+mientras que la otra permanece en estado pasivo, preparada para asumir
+las responsabilidades de la instancia activa.
+
+Ante la ausencia de una respuesta durante
+2500 milisegundos, el cliente puede establecer una conexión
+con la instancia alternativa y reenviar la solicitud original,
+realizando un máximo de tres intentos. Los gestores intercambian
+mensajes de Heartbeat cada 1000 milisegundos, con un tiempo de
+expiración de 2000 milisegundos.
+
+De esta manera, la recuperación ante fallos se efectúa mediante la
+coordinación entre las instancias del Gestor de Transacciones y los
+mecanismos de reconexión de los clientes, sin requerir la intervención
+manual de estos últimos.
+
+Cabe mencionar que ambas instancias se encuentran desplegadas sobre
+la misma máquina física, por lo que el mecanismo implementado proporciona
+tolerancia ante fallos de los procesos, más no ante fallos completos
+del nodo de ejecución.
+
+\subsubsection{Procesamiento Concurrente}
+
+Para superar las limitaciones del procesamiento secuencial, se 
+incorporaron sockets Router y Dealer en el Gestor de Transacciones, 
+permitiendo mantener hasta 16 solicitudes pendientes hacia el 
+Servicio RMC sin bloquear la recepción de nuevas solicitudes. 
+Asimismo, los servicios RMC y Persistencia implementan grupos 
+de cuatro trabajadores (Thread Pools), utilizando un distribuidor 
+de solicitudes basado en el patrón Router/Dealer. Cada trabajador administra 
+sus propios sockets o conexiones a la base de datos, permitiendo 
+el procesamiento concurrente de las operaciones.
+
+\subsection{Diagramas Arquitectura Final}
+
+A partir de los mecanismos descritos anteriormente, se actualizaron 
+los diagramas de la arquitectura base con el propósito de representar 
+los cambios.
+
+\subsubsection{Diagrama de Despliegue}
+
+La arquitectura final conserva la distribución de los componentes 
+sobre tres máquinas físicas, correspondientes a las capas de consumidores, 
+servicios de negocio y almacenamiento.
+
+En la máquina de consumidores se ejecutan los clientes encargados 
+de generar las solicitudes al sistema. Cada cliente dispone de las 
+direcciones de ambas instancias del Gestor de Transacciones, permitiendo 
+la reconexión y el reenvío de solicitudes ante un fallo de la instancia 
+activa.
+
+En la máquina de servicios de negocio se despliegan las dos instancias 
+del Gestor de Transacciones, el Servicio RMC y el Servicio de Cancelación. 
+Las instancias del gestor mantienen un canal de comunicación adicional 
+para coordinar sus estados mediante el patrón Binary Star.
+
+En la máquina de almacenamiento se despliega el Servicio de Persistencia 
+junto con las dos instancias de PostgreSQL. Estas últimas se ejecutan 
+en contenedores Docker independientes y mantienen un canal de replicación 
+asíncrona mediante los registros WAL.
+
+Adicionalmente, se actualizaron los patrones de comunicación entre los 
+componentes para representar los mecanismos de procesamiento concurrente
+incorporados en la arquitectura final.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{despliegueEscalable.png}}
+    \caption{Diagrama de Despliegue Final.}
+    \label{DiagramaDespliegueFinal}
+\end{figure}
+\subsubsection{Diagrama de Componentes}
+
+La arquitectura final conserva la separación de responsabilidades 
+establecida en la arquitectura base. Sin embargo, se modificaron las 
+dependencias del Servicio de Persistencia para representar el acceso 
+a las dos instancias de PostgreSQL y el enrutamiento de operaciones 
+entre estas.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{componentesEscalable.png}}
+    \caption{Diagrama de Componentes Final.}
+    \label{DiagramaComponenteFinal}
+\end{figure}
+
+
+\subsubsection{Diagramas de Secuencia}
+
+Los diagramas de secuencia fueron actualizados para representar los 
+cambios introducidos en el comportamiento del sistema, particularmente 
+el enrutamiento de las consultas generales hacia la réplica de 
+PostgreSQL.
+
+Adicionalmente, se incorporó un diagrama de secuencia que representa 
+el proceso de recuperación ante un fallo del Gestor de Transacciones. 
+En este se describe la detección del fallo, la reconexión del cliente 
+con la instancia alternativa, el reenvío de la solicitud y la 
+recuperación o ejecución de la operación correspondiente.
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{replica.png}}
+    \caption{Escenario Consulta Reserva enReplica.}
+    \label{replica}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centerline{\includegraphics[width=\columnwidth]{failover.png}}
+    \caption{Escenario Recuperacion Fallo.}
+    \label{failover}
+\end{figure}
+
+
+
 
 \section{Protocolo de pruebas}
 
-El protocolo de pruebas del sistema contempla diferentes niveles de validacion para asegurar su correcto
-funcionamiento y posterior medicion de rendimiento ante diferentes cargas y tolerancia a fallos.
+El protocolo de pruebas del sistema contempla diferentes niveles de validación para asegurar su correcto
+funcionamiento y posterior medición de rendimiento ante diferentes cargas y tolerancia a fallos.
 
-Primeramente se realizaran pruebas unitarias sobre la logica de los diferentes servicios sin usar red ni base de datos. 
-Se verificarán las decisiones que tome el RMC frente a distintas solicitudes simulando respuestas recibidas por parte de 
+Primeramente, se realizarán pruebas unitarias sobre la lógica de los diferentes servicios sin usar red ni base de datos.
+Se verificarán las decisiones que tome el RMC frente a distintas solicitudes simulando respuestas recibidas por parte de
 los otros servicios, además del empaquetado de las mismas y su uso correspondiente.
 
 Para las pruebas de integración del sistema, se llevarán a cabo distintos casos de prueba, y se tendrá en cuenta la coherencia entre
 la comunicación del sistema para responder frente al escenario, verificando que los servicios se atiendan entre sí (El servicio de persistencia
 con la base de datos y el servicio RMC y el servicio RMC con persistencia y el Gestor de transacciones).
 
-En el apartado end to end se plantearán distintos flujos de negocio enfocados en las posibles interacciones que pueda tener el cliente 
-con el sistema interactuando desde el Gestor de Transacciones, esperando obtener un resultado concreto para verificar que el flujo de 
+En el apartado end to end se plantearán distintos flujos de negociosenfocados en las posibles interacciones que pueda tener el cliente
+con el sistema interactuando desde el Gestor de Transacciones, esperando obtener un resultado concreto para comprobar que el flujo de
 lógica del sistema funcione correctamente. Se contemplan posibles escenarios de múltiples solicitudes al mismo tiempo, distintas
 solicitudes desde el mismo cliente o incluso solicitudes inválidas.
 
-En relacion a las pruebas del sistema distribuido se realizaran pruebas concurrentes con diferentes numeros de clientes 
-que realicen operaciones simultaneamente. De esta manera se evaluara el comportamiento y rendimiento
-del sistema ante diferentes cargas de operaciones. Como se muestra en la Tabla \ref{tab:pruebas_rendimiento} 
-se obtendran metricas que evaluen y comparen el diseño de la arquitectura base y la arquitectura escalable 
-propuesta en la seccion anterior. Cada prueba de carga contempla una generacion de operaciones por parte de los clientes 
-de 3 minutos.	
+En relación a las pruebas del sistema distribuido se realizarán pruebas concurrentes con diferentes números de clientes
+que realicen operaciones simultáneamente. De esta manera se evaluará el comportamiento y rendimiento
+del sistema ante diferentes cargas de operaciones. Como se muestra en la Tabla \ref{tab:pruebas_rendimiento}
+se obtendrán métricas que evalúen y comparen el diseño de la arquitectura base y la arquitectura escalable
+propuesta en la sección anterior. Cada prueba de carga contempla una generación de operaciones por parte de los clientes
+de 3 minutos.
 
-Asimismo se considerara una prueba de fallo y resilencia mediante la interrupcion voluntaria del Gestor de Transacciones.
+Asimismo se considerará una prueba de fallo y resiliencia mediante la interrupción voluntaria del Gestor de Transacciones.
 Ante esta falla se espera que el sistema instancie un nuevo proceso que sustituya al servicio.
-En esta prueba se evaluara que el servicio pueda retomar la operacion del sistema, siendo esta falla transparente para el cliente
-al poder retomar las operaciones desde la interrupcion.
-
+En esta prueba se evaluará que el servicio pueda retomar la operación del sistema, siendo esta falla transparente para el cliente
+al poder retomar las operaciones desde la interrupción.
 
 \begin{table}[htpb]
 \centering
@@ -292,41 +474,40 @@ Transacciones por minuto de consultas y reservas.
 }
 \\ \cline{1-1}
 
-5 clientes: 3 consultas y 2 reservas y modificaciones.
+5 clientes: 3 consultas y 2 reservas.
 &
 \\ \cline{1-1}
 
-8 clientes: 4 consultas y 4 reservas y modificaciones.
+8 clientes: 4 consultas y 4 reservas.
 &
 \\ \hline
 
 \end{tabularx}
 \end{table}
 
-\section{Estrategias de obtencion de metricas}
-Para obtener las metricas de desempeño se utilizara un generador de carga, Python y la libreria \texttt{pandas}.
-Estas seran hechas en el Cliente y el Gestor de Transacciones.
+Para obtener las métricas de desempeño se utilizará Locust como generador de carga, Python y la librería \texttt{pandas}.
+Estas serán hechas en el Cliente y el Gestor de Transacciones.
 
-Para consultas y reservas se medira el tiempo de respuesta de cada solicitud en el cliente con \texttt{time.perf\_counter}, 
-tomando como inicio el envio de la solicitud al Gestor de Transacciones hasta que recibe su respectiva respuesta.
-Cada medicion sera almacenada en un archivo junto con el tipo de operación.
-Posteriorimente mediante \texttt{pandas} se calculara el promedio y la desviación estándar de cada tipo de operacion.
+Para consultas y reservas se medirá el tiempo de respuesta de cada solicitud en el cliente con \texttt{time.perf\_counter},
+tomando como inicio el envío de la solicitud al Gestor de Transacciones hasta que recibe su respectiva respuesta.
+Cada medición será almacenada en un archivo junto con el tipo de operación.
+Posteriormente, mediante \texttt{pandas} se calculará el promedio y la desviación estándar de cada tipo de operación.
 
-Para las transacciones por minuto (TPM) se el Gestor de Transacciones registrara cada 
+Para las transacciones por minuto (TPM) sé el Gestor de Transacciones registrará cada
 solicitud atendida junto a su marca de tiempo y tipo de operación en un archivo. A partir de los registros
-se cuantifican las transacciones procesadas de cada tipo durante el periodo de medicion definidio en el plan de pruebas de 3 minutos,
-calculando finalmente la tasa de transacciones por minutuo.
+se cuantifican las transacciones procesadas de cada tipo durante los 3 minutos de medición definido en el plan de pruebas,
+calculando finalmente la tasa de transacciones por minuto.
 
-\section{Generacion de carga clientes}
-La carga se genera con Locust usando un usuario personalizado en Python que se comunica con el Gestor de Transacciones mediante pyzmq, 
+
+\section{Generación de carga clientes}
+La carga se genera con Locust usando un usuario personalizado en Python que se comunica con el Gestor de Transacciones mediante pyzmq,
 cada cliente tiene su propio socket REQ y construye cada mensaje con el mismo formato del struct Request.
 
-Los clientes toman sus datos de un archivo load\_data.json, generado con un script que crea identificadores de cliente, eventos, 
-meses y ocurrencias. La base de datos se carga a partir de ese mismo archivo, de modo que los identificadores coinciden en ambos lados. 
+Los clientes toman sus datos de un archivo load\_data.json, generado con un script que crea identificadores de cliente, eventos,
+meses y ocurrencias. La base de datos se carga a partir de ese mismo archivo, de modo que los identificadores coinciden en ambos lados.
 
-En cada solicitud, el cliente elige de forma aleatoria (utilizando la función random.choice de la librería random) el mes en el caso de
-la consulta y el evento, la ocurrencia y el número de asientos en el caso de la reserva. Por lo anterior, se cuenta con dos tipos de 
-cliente: uno que solo consulta y otro que consulta y reserva, lo que permite simular los escenarios de la Tabla 1.
+En cada solicitud, el cliente elegirá de forma aleatoria (utilizando la función random.choice de la librería random) el mes en el caso de
+la consulta y el evento, la ocurrencia y el número de asientos en el caso de la reserva. Por lo anterior, se cuenta con dos tipos de
+cliente: uno que solo consulta y otro que reserva, lo que permite simular los escenarios de la Tabla 1.
 
 \end{document}
-
