@@ -7,10 +7,11 @@ Objetivo: Generar el archivo load_data.json con los clientes, eventos, ocurrenci
 import json
 
 # Parámetros de los datos a generar
-NUM_CLIENTS = 5                    # Clientes disponibles (C001, C002, ...)
-NUM_EVENTS = 2                     # Eventos por cada mes
-EVENTS_WITH_TWO_OCCURRENCES = 0    # Cantidad de eventos (por mes) con dos ocurrencias; el resto tiene una sola
-MONTHS = ["octubre"]               # Meses en los que se programan los eventos
+NUM_CLIENTS = 8                    # Clientes disponibles (C001, C002, ...)
+NUM_EVENTS = 1888                     # Eventos por cada mes
+EVENTS_WITH_TWO_OCCURRENCES = 1567    # Cantidad de eventos (por mes) con dos ocurrencias; el resto tiene una sola
+MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+# Meses en los que se programan los eventos
 
 # Construye la lista de eventos. El contador eventNumber no se reinicia entre meses,
 # así que cada ID es único en todo el archivo (E1, E2, ...) y cada ocurrencia se nombra con el ID de su evento (E1-1, E1-2, ...)
