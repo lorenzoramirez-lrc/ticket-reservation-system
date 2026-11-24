@@ -19,7 +19,7 @@ import zmq.green as zmq
 from locust import User, task, constant_throughput, events, constant
 from locust.exception import StopUser
 
-# Formato de Request (compatible con Request struct de C++)
+# Formato binario de Request. Los tres bytes de relleno alinean quantity con el struct de C++.
 FORMAT = "<i37s32s32s32s32s3xi16s64s64s"
 RESERVE, CANCEL, QUERY, MODIFY_QUANTITY, MODIFY_OCCURRENCE, CHECK_SEATS, CHECK_RESERVATION, CHECK_OCCURRENCES = range(8)
 
@@ -97,30 +97,19 @@ def buildRequest(type, clientID="", eventID="", occurrenceID="", reservationID="
         field(requestID, 64),
     )
 
-# Clase abstracta BaseClient
-# Contiene los metodos por defecto del cliente
-# El atributo wait_time fija el ritmo de cada cliente (REQS_PER_MIN solicitudes por minuto) y abstract = True
-# evita que Locust la use directamente como un cliente simulado
-class BaseClient(User):
-    abstract = True
-    wait_time = constant_throughput(REQS_PER_MIN / 60)
 
-    # on_start
-    # Parametros de entrada: ninguno (self es el cliente simulado)
+# Comparte la conexión con los gestores entre los clientes de carga y de rendimiento.
+class ManagerFailover:
+    verbose_transport = False
+
+    # _connect_managers
+    # Parametros de entrada: ninguno
     # Parametros de salida: ninguno
-    # Función: Locust lo ejecuta una vez, cuando se crea cada cliente simulado. Crea el contexto de ZeroMQ,
-    # le asigna a este cliente el siguiente ID de la lista de clientes (CLIENT_POOL) y abre la conexión con el Gestor de Transacciones.
-    def on_start(self):
-        self.ctx = zmq.Context()
-        self.clientID = next(CLIENT_POOL)
-        self.reservations = []
+    # Función: Configura el primario y el secundario y abre la conexión inicial con el primario.
+    def _connect_managers(self):
         self.manager_addrs = [MANAGER_ADDR, BACKUP_MANAGER_ADDR]
         self.current_manager = 0
-        self.pending_cancellations = {}
-        self._running = True
         self._connect()
-        self._connect_notifications()
-        self._notification_greenlet = gevent.spawn(self.receive_notification)
 
     # _connect
     # Parametros de entrada: ninguno
@@ -130,6 +119,7 @@ class BaseClient(User):
     def _connect(self):
         self.sock = self.ctx.socket(zmq.REQ)
         self.sock.setsockopt(zmq.LINGER, 0)
+        self.sock.setsockopt(zmq.SNDTIMEO, REQUEST_TIMEOUT_MS)
         self.sock.connect(self.manager_addrs[self.current_manager])
 
     # _switch_manager
@@ -141,6 +131,59 @@ class BaseClient(User):
         self.current_manager = (self.current_manager + 1) % len(self.manager_addrs)
         print(f"[CLIENTE {self.clientID}] Failover -> reconectando a {self.manager_addrs[self.current_manager]}", flush=True)
         self._connect()
+
+    # _send_with_failover
+    # Parametros de entrada: solicitud ya empaquetada (bytes)
+    # Parametros de salida: respuesta del gestor (bytes). Lanza zmq.Again al agotar los intentos.
+    # Función: Reenvía los mismos bytes al gestor alterno tras un timeout o un rechazo por estado pasivo.
+    # Después de una respuesta, las siguientes solicitudes usan el gestor que respondió.
+    def _send_with_failover(self, data):
+        for attempt in range(REQUEST_RETRIES):
+            addr = self.manager_addrs[self.current_manager]
+            if self.verbose_transport:
+                print(f"[CLIENTE {self.clientID}] Enviando {len(data)} bytes a {addr} "
+                      f"(intento {attempt + 1}/{REQUEST_RETRIES})", flush=True)
+
+            try:
+                self.sock.send(data)
+                if self.sock.poll(REQUEST_TIMEOUT_MS, zmq.POLLIN) & zmq.POLLIN:
+                    response = self.sock.recv()
+                    if response != b"ERROR: gestor en modo pasivo":
+                        if self.verbose_transport:
+                            print(f"[CLIENTE {self.clientID}] Respuesta recibida de {addr}", flush=True)
+                        return response
+            except zmq.Again:
+                # El envío agotó su plazo. El siguiente intento abre otro socket REQ.
+                pass
+
+            self._switch_manager()
+
+        raise zmq.Again()
+
+
+# Clase abstracta BaseClient
+# Contiene los metodos por defecto del cliente
+# El atributo wait_time fija el ritmo de cada cliente (REQS_PER_MIN solicitudes por minuto) y abstract = True
+# evita que Locust la use directamente como un cliente simulado
+class BaseClient(ManagerFailover, User):
+    abstract = True
+    verbose_transport = True
+    wait_time = constant_throughput(REQS_PER_MIN / 60)
+
+    # on_start
+    # Parametros de entrada: ninguno (self es el cliente simulado)
+    # Parametros de salida: ninguno
+    # Función: Locust lo ejecuta una vez, cuando se crea cada cliente simulado. Crea el contexto de ZeroMQ,
+    # le asigna a este cliente el siguiente ID de la lista de clientes (CLIENT_POOL) y abre la conexión con el Gestor de Transacciones.
+    def on_start(self):
+        self.ctx = zmq.Context()
+        self.clientID = next(CLIENT_POOL)
+        self.reservations = []
+        self.pending_cancellations = {}
+        self._running = True
+        self._connect_managers()
+        self._connect_notifications()
+        self._notification_greenlet = gevent.spawn(self.receive_notification)
 
     # _connect_notifications
     # Parametros de entrada: ninguno
@@ -202,32 +245,16 @@ class BaseClient(User):
         self.ctx.term()
         
 
+
     # _send
-    # Parametros de entrada: mensaje de la solicitud en bytes, construido previamente con buildRequest
-    # Parametros de salida: bytes (respuesta del Gestor de Transacciones)
-    # Función: Envía la solicitud al Gestor de Transacciones con timeout (patrón Lazy Pirate para Binary Star).
-    # Si vence REQUEST_TIMEOUT_MS, cambia al gestor alterno y reenvía los mismos bytes para conservar requestId.
+    # Parametros de entrada: solicitud ya empaquetada (bytes)
+    # Parametros de salida: respuesta del gestor (bytes)
+    # Función: Traduce el agotamiento de los reintentos al mensaje de error de los clientes de carga.
     def _send(self, data):
-        for attempt in range(REQUEST_RETRIES):
-            addr = self.manager_addrs[self.current_manager]
-            print(f"[CLIENTE {self.clientID}] Enviando {len(data)} bytes a {addr} (intento {attempt + 1}/{REQUEST_RETRIES})", flush=True)
-
-            self.sock.send(data)
-
-            poller = zmq.Poller()
-            poller.register(self.sock, zmq.POLLIN)
-            socks = dict(poller.poll(REQUEST_TIMEOUT_MS))
-
-            if socks.get(self.sock) == zmq.POLLIN:
-                response = self.sock.recv()
-                print(f"[CLIENTE {self.clientID}] Respuesta recibida de {addr}", flush=True)
-                return response
-
-            print(f"[CLIENTE {self.clientID}] Timeout esperando respuesta de {addr}", flush=True)
-            self._switch_manager()
-
-        return b"ERROR: ningun gestor disponible"
-
+        try:
+            return self._send_with_failover(data)
+        except zmq.Again:
+            return b"ERROR: ningun gestor disponible"
 
     # _query
     # Parametros de entrada: ninguno
@@ -486,7 +513,7 @@ def on_locust_init(environment, **kwargs):
             json.dump(metadata, f, indent=2)
 
 
-class PerformanceUser(User):
+class PerformanceUser(ManagerFailover, User):
     """
     Cliente de rendimiento de Locust para evaluar los escenarios 1, 2 y 3.
     - Ejecuta de forma continua sin pausas artificiales (wait_time nulo).
@@ -498,13 +525,8 @@ class PerformanceUser(User):
     def on_start(self):
         global _SPAWNED_USERS, _COORDINATED_START, _EXPECTED_USERS
         self.ctx = zmq.Context()
-        self.sock = self.ctx.socket(zmq.REQ)
-        self.sock.setsockopt(zmq.LINGER, 0)
-        self.sock.setsockopt(zmq.RCVTIMEO, 5000)
-        self.sock.setsockopt(zmq.SNDTIMEO, 5000)
-        self.sock.connect(MANAGER_ADDR)
-
         self.clientID = next(CLIENT_POOL)
+        self._connect_managers()
         self.seq_num = 0
         self.records = []
         self.scenario_cfg = PERF_SCENARIOS.get(str(SCENARIO), PERF_SCENARIOS["1"])
@@ -538,8 +560,7 @@ class PerformanceUser(User):
         resp_bytes = b""
 
         try:
-            self.sock.send(data)
-            resp_bytes = self.sock.recv()
+            resp_bytes = self._send_with_failover(data)
             t1 = time.perf_counter()
             elapsed_ms = (t1 - t0) * 1000.0
 
@@ -557,13 +578,7 @@ class PerformanceUser(User):
             t1 = time.perf_counter()
             elapsed_ms = (t1 - t0) * 1000.0
             status = "TIMEOUT"
-            error_msg = "ZeroMQ REQ receive timeout"
-            self.sock.close()
-            self.sock = self.ctx.socket(zmq.REQ)
-            self.sock.setsockopt(zmq.LINGER, 0)
-            self.sock.setsockopt(zmq.RCVTIMEO, 5000)
-            self.sock.setsockopt(zmq.SNDTIMEO, 5000)
-            self.sock.connect(MANAGER_ADDR)
+            error_msg = "Sin respuesta de los gestores después de agotar los reintentos"
         except Exception as e:
             t1 = time.perf_counter()
             elapsed_ms = (t1 - t0) * 1000.0
